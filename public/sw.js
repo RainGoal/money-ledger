@@ -1,11 +1,12 @@
-const CACHE_NAME = "money-ledger-v1";
+const CACHE_NAME = "money-ledger-v2";
 const ASSETS = [
   "/",
   "/index.html",
   "/styles.css",
   "/app.js",
   "/manifest.webmanifest",
-  "/icon.svg"
+  "/icon.svg",
+  "/kitty-pattern.svg"
 ];
 
 self.addEventListener("install", event => {

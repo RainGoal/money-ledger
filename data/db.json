@@ -14,7 +14,7 @@
       "id": "daily",
       "name": "日用品",
       "color": "#b15c2f",
-      "limit": 800
+      "limit": 1800
     },
     {
       "id": "transport",
@@ -38,7 +38,7 @@
   "monthlyBudgets": {
     "2026-05": {
       "food": 3000,
-      "daily": 800,
+      "daily": 1800,
       "transport": 600,
       "fun": 1000,
       "home": 1200

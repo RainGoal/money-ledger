@@ -9,6 +9,13 @@
     <title>月度预算</title>
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="icon" href="/icon.svg" type="image/svg+xml">
+    <script>
+      try {
+        document.documentElement.dataset.theme = localStorage.getItem("ledgerTheme") || "minimal";
+      } catch {
+        document.documentElement.dataset.theme = "minimal";
+      }
+    </script>
     <link rel="stylesheet" href="/styles.css">
   </head>
   <body>
@@ -149,6 +156,21 @@
 
         <section id="settingsView" class="view" aria-label="预算设置">
           <form id="settingsForm" class="settings-panel">
+            <div class="section-heading">
+              <h2>主题</h2>
+              <span class="panel-hint">本机保存</span>
+            </div>
+            <div class="theme-switch" role="group" aria-label="主题切换">
+              <button class="theme-option is-active" type="button" data-theme-choice="minimal" aria-pressed="true">
+                <span class="theme-preview theme-preview--minimal" aria-hidden="true"></span>
+                <span>简约</span>
+              </button>
+              <button class="theme-option" type="button" data-theme-choice="cute" aria-pressed="false">
+                <span class="theme-preview theme-preview--cute" aria-hidden="true"></span>
+                <span>可爱 Kitty</span>
+              </button>
+            </div>
+
             <div class="section-heading">
               <h2>成员</h2>
             </div>

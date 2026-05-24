@@ -2,12 +2,15 @@ const state = {
   data: null,
   selectedCategoryId: null,
   selectedMember: null,
+  theme: normalizeTheme(localStorage.getItem("ledgerTheme")),
   token: localStorage.getItem("ledgerToken") || ""
 };
 
 const elements = {
+  themeColorMeta: document.querySelector("meta[name='theme-color']"),
   monthInput: document.querySelector("#monthInput"),
   tabs: document.querySelectorAll(".tab"),
+  themeOptions: document.querySelectorAll("[data-theme-choice]"),
   views: {
     dashboard: document.querySelector("#dashboardView"),
     entry: document.querySelector("#entryView"),
@@ -46,6 +49,72 @@ const elements = {
   weekdayList: document.querySelector("#weekdayList"),
   rankList: document.querySelector("#rankList")
 };
+
+const MINIMAL_TAB_ICONS = {
+  dashboard: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 10.5 12 4l7.5 6.5V20a1 1 0 0 1-1 1h-4.25v-5.5h-4.5V21H5.5a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg>`,
+  details: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 7h11M6.5 12h11M6.5 17h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+  entry: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>`,
+  stats: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V9m7 10V5m7 14v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
+  settings: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5A3.5 3.5 0 1 0 12 15.5 3.5 3.5 0 0 0 12 8.5Zm7.2 3.5c0-.5-.1-1-.2-1.5l2-1.5-2-3.5-2.4 1a8 8 0 0 0-2.6-1.5L13.7 2h-4l-.4 3a8 8 0 0 0-2.6 1.5l-2.4-1-2 3.5 2 1.5A8 8 0 0 0 4 12c0 .5.1 1 .2 1.5l-2 1.5 2 3.5 2.4-1A8 8 0 0 0 9.2 19l.4 3h4l.4-3a8 8 0 0 0 2.6-1.5l2.4 1 2-3.5-2-1.5c.1-.5.2-1 .2-1.5Z" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linejoin="round"/></svg>`
+};
+
+const CUTE_TAB_SYMBOLS = {
+  dashboard: `<path class="kitty-symbol" d="M8.9 16.2 12 13.6l3.1 2.6v2.2h-2v-1.6h-2.2v1.6h-2z"/>`,
+  details: `<path class="kitty-symbol" d="M8.7 15.1h6.6M8.7 17.1h6.6M8.7 19.1h4.2"/>`,
+  entry: `<path class="kitty-symbol" d="M12 14.3v5M9.5 16.8h5"/>`,
+  stats: `<path class="kitty-symbol" d="M9 18.9v-2.8M12 18.9v-4.6M15 18.9v-3.5"/>`,
+  settings: `<path class="kitty-symbol" d="M12 15.1a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4Zm4.2 1.7h-1M9.8 16.8h-1M12 13.6v-1M12 21v-1"/>`
+};
+
+function cuteTabIcon(view) {
+  return `
+    <svg class="kitty-tab-svg" viewBox="0 0 24 24" aria-hidden="true">
+      <path class="kitty-ear" d="M6.7 9.5 8.4 4.8l3.4 3.5"/>
+      <path class="kitty-ear" d="M17.3 9.5 15.6 4.8l-3.4 3.5"/>
+      <ellipse class="kitty-face" cx="12" cy="13.2" rx="7.5" ry="5.9"/>
+      <path class="kitty-whisker" d="M5.2 12.9H2.9M5.4 14.9l-2.1.8M18.8 12.9h2.3M18.6 14.9l2.1.8"/>
+      <circle class="kitty-eye" cx="9.5" cy="12.8" r="0.58"/>
+      <circle class="kitty-eye" cx="14.5" cy="12.8" r="0.58"/>
+      <ellipse class="kitty-nose" cx="12" cy="14.2" rx="0.72" ry="0.5"/>
+      <path class="kitty-bow" d="M15.9 6.2c1.4-1.3 3.4-.6 3.5 1.2.1 1.6-1.8 2.3-3.4 1.2.5-.7.5-1.6-.1-2.4Z"/>
+      <path class="kitty-bow" d="M14.1 6.9c-.8-1.5-2.8-1.4-3.4.2-.5 1.5 1 2.6 2.8 1.9-.2-.7 0-1.5.6-2.1Z"/>
+      <circle class="kitty-bow-knot" cx="14.8" cy="7.9" r="1.1"/>
+      ${CUTE_TAB_SYMBOLS[view] || ""}
+    </svg>
+  `;
+}
+
+function normalizeTheme(theme) {
+  return theme === "cute" ? "cute" : "minimal";
+}
+
+function renderTabIcons() {
+  elements.tabs.forEach(tab => {
+    const icon = tab.querySelector(".tab-icon");
+    if (!icon) return;
+    const view = tab.dataset.view;
+    icon.innerHTML = state.theme === "cute" ? cuteTabIcon(view) : MINIMAL_TAB_ICONS[view] || "";
+  });
+}
+
+function renderThemeControls() {
+  elements.themeOptions.forEach(button => {
+    const isActive = button.dataset.themeChoice === state.theme;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+}
+
+function applyTheme(theme) {
+  state.theme = normalizeTheme(theme);
+  document.documentElement.dataset.theme = state.theme;
+  localStorage.setItem("ledgerTheme", state.theme);
+  if (elements.themeColorMeta) {
+    elements.themeColorMeta.setAttribute("content", state.theme === "cute" ? "#fff7fb" : "#ffffff");
+  }
+  renderTabIcons();
+  renderThemeControls();
+}
 
 function today() {
   const now = new Date();
@@ -514,6 +583,7 @@ function registerServiceWorker() {
 
 function bindEvents() {
   elements.tabs.forEach(tab => tab.addEventListener("click", () => setView(tab.dataset.view)));
+  elements.themeOptions.forEach(button => button.addEventListener("click", () => applyTheme(button.dataset.themeChoice)));
   elements.monthInput.addEventListener("change", loadState);
   elements.expenseForm.addEventListener("submit", submitExpense);
   elements.settingsForm.addEventListener("submit", saveSettings);
@@ -525,6 +595,7 @@ function init() {
   const now = today();
   elements.monthInput.value = now.month;
   elements.dateInput.value = now.date;
+  applyTheme(state.theme);
   bindEvents();
   registerServiceWorker();
   loadState().catch(error => {
