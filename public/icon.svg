@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="月度预算">
+  <rect width="256" height="256" rx="48" fill="#f4f1e8"/>
+  <path d="M54 70h148v116H54z" fill="#fffdf6" stroke="#1e2321" stroke-width="10"/>
+  <path d="M54 103h148" stroke="#1e2321" stroke-width="10"/>
+  <path d="M88 58v30M168 58v30" stroke="#1e2321" stroke-width="12" stroke-linecap="round"/>
+  <path d="M80 143h96" stroke="#2f7d5c" stroke-width="14" stroke-linecap="round"/>
+  <path d="M80 169h54" stroke="#bd4257" stroke-width="14" stroke-linecap="round"/>
+</svg>

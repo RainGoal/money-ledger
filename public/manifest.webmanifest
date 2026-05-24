@@ -1,0 +1,17 @@
+{
+  "name": "月度预算",
+  "short_name": "预算",
+  "description": "两个人共用的月度分类预算看板",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f1e8",
+  "theme_color": "#f4f1e8",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

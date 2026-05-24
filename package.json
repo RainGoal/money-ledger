@@ -1,0 +1,14 @@
+{
+  "name": "money-ledger",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A small self-hosted monthly category budget PWA for two people.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
