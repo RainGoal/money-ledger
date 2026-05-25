@@ -11,6 +11,8 @@ const state = {
   token: localStorage.getItem("ledgerToken") || ""
 };
 
+const BASE_PATH = normalizeBasePath(window.__LEDGER_BASE_PATH__ || "");
+
 const elements = {
   themeColorMeta: document.querySelector("meta[name='theme-color']"),
   monthInput: document.querySelector("#monthInput"),
@@ -143,7 +145,7 @@ const CUTE_TAB_SYMBOLS = {
   settings: `<path class="kitty-symbol" d="M12 15.1a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4Zm4.2 1.7h-1M9.8 16.8h-1M12 13.6v-1M12 21v-1"/>`
 };
 
-const HELLO_KITTY_ICON = "/hello-kitty-red.jpg";
+const HELLO_KITTY_ICON = assetPath("/hello-kitty-red.jpg");
 
 const CUSTOM_THEME_STORAGE_KEY = "ledgerCustomTheme";
 const ENTRY_TEMPLATE_STORAGE_KEY = "ledgerEntryTemplates";
@@ -672,6 +674,22 @@ function today() {
   return { month, date };
 }
 
+function normalizeBasePath(path) {
+  const value = String(path || "").trim();
+  if (!value || value === "/") return "";
+  return `/${value.replace(/^\/+|\/+$/g, "")}`;
+}
+
+function withBasePath(path) {
+  const cleanPath = String(path || "");
+  if (/^https?:\/\//i.test(cleanPath)) return cleanPath;
+  return `${BASE_PATH}${cleanPath.startsWith("/") ? cleanPath : `/${cleanPath}`}`;
+}
+
+function assetPath(path) {
+  return withBasePath(path);
+}
+
 function money(value) {
   return Number(value || 0).toLocaleString("zh-CN", {
     minimumFractionDigits: 2,
@@ -708,7 +726,7 @@ function apiErrorMessage(payload, response) {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(path, {
+  const response = await fetch(withBasePath(path), {
     ...options,
     headers: {
       ...apiHeaders(),
@@ -885,9 +903,9 @@ function renderSummary() {
   elements.remainingDays.textContent = String(totals.remainingDays);
   elements.totalMeter.style.width = `${Math.min(totals.percent, 100)}%`;
   elements.totalMeter.style.background = meterColor(totals.percent);
-  elements.exportLink.href = `/api/export.csv?month=${encodeURIComponent(state.data.month)}${state.token ? `&token=${encodeURIComponent(state.token)}` : ""}`;
+  elements.exportLink.href = withBasePath(`/api/export.csv?month=${encodeURIComponent(state.data.month)}${state.token ? `&token=${encodeURIComponent(state.token)}` : ""}`);
   if (elements.jsonExportLink) {
-    elements.jsonExportLink.href = `/api/export.json${state.token ? `?token=${encodeURIComponent(state.token)}` : ""}`;
+    elements.jsonExportLink.href = withBasePath(`/api/export.json${state.token ? `?token=${encodeURIComponent(state.token)}` : ""}`);
   }
 }
 
@@ -1837,7 +1855,7 @@ function escapeAttribute(value) {
 
 function registerServiceWorker() {
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js").catch(() => {});
+    navigator.serviceWorker.register(withBasePath("/sw.js"), { scope: `${BASE_PATH || ""}/` }).catch(() => {});
   }
 }
 

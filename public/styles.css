@@ -38,7 +38,7 @@ html[data-theme="cute"] {
   --red: #e84b7b;
   --red-soft: #ffe5ee;
   --radius: 24px;
-  --page-pattern: url("/hello-kitty-soft.jpg");
+  --page-pattern: url("__BASE_PATH__/hello-kitty-soft.jpg");
   --focus-border: rgba(232, 75, 123, 0.38);
   --focus-ring: rgba(232, 75, 123, 0.12);
   --tabbar-bg: rgba(255, 242, 247, 0.96);
@@ -368,7 +368,7 @@ html[data-theme="cute"] .summary-panel::before {
   content: "";
   position: absolute;
   inset: 0;
-  background-image: url("/hello-kitty-red.jpg");
+  background-image: url("__BASE_PATH__/hello-kitty-red.jpg");
   background-repeat: no-repeat;
   background-position: center 44%;
   background-size: cover;
@@ -711,7 +711,7 @@ html[data-theme="cute"] .category-meter {
   content: "";
   position: absolute;
   inset: 0;
-  background-image: url("/hello-kitty-soft.jpg");
+  background-image: url("__BASE_PATH__/hello-kitty-soft.jpg");
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;

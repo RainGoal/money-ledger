@@ -1,13 +1,14 @@
-const CACHE_NAME = "money-ledger-v22";
+const CACHE_NAME = "money-ledger-v23";
+const BASE_PATH = "__BASE_PATH__";
 const ASSETS = [
-  "/",
-  "/index.html",
-  "/styles.css",
-  "/app.js",
-  "/manifest.webmanifest",
-  "/icon.svg",
-  "/hello-kitty-soft.jpg",
-  "/hello-kitty-red.jpg"
+  `${BASE_PATH}/`,
+  `${BASE_PATH}/index.html`,
+  `${BASE_PATH}/styles.css`,
+  `${BASE_PATH}/app.js`,
+  `${BASE_PATH}/manifest.webmanifest`,
+  `${BASE_PATH}/icon.svg`,
+  `${BASE_PATH}/hello-kitty-soft.jpg`,
+  `${BASE_PATH}/hello-kitty-red.jpg`
 ];
 
 self.addEventListener("install", event => {
@@ -26,7 +27,8 @@ self.addEventListener("activate", event => {
 
 self.addEventListener("fetch", event => {
   const requestUrl = new URL(event.request.url);
-  if (requestUrl.pathname.startsWith("/api/")) return;
+  if (!requestUrl.pathname.startsWith(`${BASE_PATH}/`)) return;
+  if (requestUrl.pathname.startsWith(`${BASE_PATH}/api/`)) return;
 
   event.respondWith(
     caches.match(event.request).then(cached => {

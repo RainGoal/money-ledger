@@ -34,6 +34,7 @@ npm start
 
 ```env
 LEDGER_TOKEN=change-this-token
+BASE_PATH=
 ```
 
 启动：
@@ -49,6 +50,32 @@ http://服务器IP:5173
 ```
 
 数据会持久化到服务器项目目录的 `data/ledger.sqlite`。如果项目目录里已有旧版 `data/db.json`，首次启动会自动导入到 SQLite，并保留原 JSON 文件作为迁移前备份。如果你用 Nginx 或 Caddy 绑定域名，把域名反向代理到 `127.0.0.1:5173`，并开启 HTTPS。
+
+如果要部署在域名子路径下，例如 `https://example.com/moneyLedger/`，把 `.env` 改成：
+
+```env
+LEDGER_TOKEN=change-this-token
+BASE_PATH=/moneyLedger
+```
+
+Nginx 反向代理要保留这个路径前缀：
+
+```nginx
+location = /moneyLedger {
+    return 301 /moneyLedger/;
+}
+
+location /moneyLedger/ {
+    proxy_pass http://127.0.0.1:5173/moneyLedger/;
+    proxy_http_version 1.1;
+    proxy_redirect off;
+
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+}
+```
 
 更新代码后重新部署：
 

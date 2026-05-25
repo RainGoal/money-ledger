@@ -6,6 +6,7 @@ const { DatabaseSync } = require("node:sqlite");
 
 const PORT = Number(process.env.PORT || 5173);
 const TOKEN = process.env.LEDGER_TOKEN || "";
+const BASE_PATH = normalizeBasePath(process.env.BASE_PATH || "");
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, "public");
 const DATA_DIR = path.join(ROOT, "data");
@@ -46,6 +47,23 @@ function ensureDataFile() {
   if (!fs.existsSync(DATA_FILE)) {
     fs.writeFileSync(DATA_FILE, JSON.stringify(DEFAULT_DATA, null, 2));
   }
+}
+
+function normalizeBasePath(value) {
+  const pathValue = String(value || "").trim();
+  if (!pathValue || pathValue === "/") return "";
+  return `/${pathValue.replace(/^\/+|\/+$/g, "")}`;
+}
+
+function stripBasePath(pathname) {
+  if (!BASE_PATH) return pathname;
+  if (pathname === BASE_PATH) return "/";
+  if (pathname.startsWith(`${BASE_PATH}/`)) return pathname.slice(BASE_PATH.length) || "/";
+  return "";
+}
+
+function applyBasePath(content) {
+  return content.replace(/__BASE_PATH__/g, BASE_PATH);
 }
 
 function loadJsonDataFile() {
@@ -943,17 +961,25 @@ function serveStatic(req, res, url) {
       return;
     }
     const extension = path.extname(filePath);
+    const shouldInjectBasePath = [".html", ".css", ".js", ".webmanifest"].includes(extension);
+    const body = shouldInjectBasePath ? applyBasePath(content.toString("utf8")) : content;
     res.writeHead(200, {
       "Content-Type": MIME_TYPES[extension] || "application/octet-stream",
       "Cache-Control": extension === ".html" ? "no-store" : "public, max-age=3600",
       "X-Content-Type-Options": "nosniff"
     });
-    res.end(content);
+    res.end(body);
   });
 }
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+  const pathname = stripBasePath(url.pathname);
+  if (!pathname) {
+    notFound(res);
+    return;
+  }
+  url.pathname = pathname;
 
   try {
     if (url.pathname.startsWith("/api/")) {
@@ -970,7 +996,7 @@ const server = http.createServer(async (req, res) => {
 initDatabase();
 
 server.listen(PORT, () => {
-  console.log(`Money Ledger PWA running at http://localhost:${PORT}`);
+  console.log(`Money Ledger PWA running at http://localhost:${PORT}${BASE_PATH || ""}`);
   console.log(`SQLite data file: ${SQLITE_FILE}`);
   if (!TOKEN) {
     console.log("LEDGER_TOKEN is not set. Set it before deploying to a public server.");

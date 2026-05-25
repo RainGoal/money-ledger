@@ -8,5 +8,6 @@ services:
     environment:
       PORT: "5173"
       LEDGER_TOKEN: "${LEDGER_TOKEN:-}"
+      BASE_PATH: "${BASE_PATH:-}"
     volumes:
       - ./data:/app/data
