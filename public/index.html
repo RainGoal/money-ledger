@@ -81,6 +81,17 @@
               <input id="amountInput" inputmode="decimal" autocomplete="off" placeholder="0.00" required>
             </label>
 
+            <div class="template-panel">
+              <div class="template-head">
+                <div>
+                  <span class="field-label">常用模板</span>
+                  <small>一键填入金额、分类、成员和备注</small>
+                </div>
+                <button id="saveTemplateButton" class="ghost-button" type="button">保存当前</button>
+              </div>
+              <div id="templateList" class="template-list"></div>
+            </div>
+
             <div class="field-group">
               <span class="field-label">分类</span>
               <div id="categoryChips" class="chip-grid"></div>
@@ -114,6 +125,29 @@
               <a id="exportLink" class="ghost-link" href="/api/export.csv" download="expenses.csv">导出 CSV</a>
             </div>
             <p class="details-intro">按日期倒序展示，每一天的合计会放在组标题右侧。</p>
+            <details class="details-filter-panel">
+              <summary>
+                <span>搜索筛选</span>
+                <small id="detailFilterStatus">未启用</small>
+              </summary>
+              <div class="details-filter-body">
+                <label class="filter-search">
+                  <span>搜索</span>
+                  <input id="detailSearchInput" autocomplete="off" placeholder="备注、分类、成员、日期或金额">
+                </label>
+                <div class="filter-row">
+                  <label>
+                    <span>分类</span>
+                    <select id="detailCategoryFilter"></select>
+                  </label>
+                  <label>
+                    <span>成员</span>
+                    <select id="detailMemberFilter"></select>
+                  </label>
+                </div>
+                <button id="detailFilterReset" class="ghost-button" type="button">清空筛选</button>
+              </div>
+            </details>
             <div id="recentList" class="detail-list"></div>
           </div>
 
@@ -192,6 +226,36 @@
               </article>
             </div>
 
+            <div class="section-heading trend-heading">
+              <h2>月度趋势</h2>
+              <span id="trendRangeLabel" class="panel-hint">最近 6 个月</span>
+            </div>
+            <div class="trend-summary-grid">
+              <article>
+                <span>本月 vs 上月</span>
+                <strong id="monthDeltaAmount">0.00</strong>
+                <small id="monthDeltaLabel">暂无上月数据</small>
+              </article>
+              <article>
+                <span>6 个月月均</span>
+                <strong id="sixMonthAverage">0.00</strong>
+                <small id="sixMonthTotal">合计 0.00</small>
+              </article>
+            </div>
+            <div id="monthlyTrendList" class="monthly-trend-list"></div>
+
+            <div class="section-heading trend-heading">
+              <h2>成员对比</h2>
+              <span id="memberCompareLabel" class="panel-hint">本月</span>
+            </div>
+            <div id="memberCompareList" class="member-compare-list"></div>
+
+            <div class="section-heading trend-heading">
+              <h2>分类月度对比</h2>
+              <span class="panel-hint">Top 5</span>
+            </div>
+            <div id="categoryCompareList" class="category-compare-list"></div>
+
             <div class="section-heading">
               <h2>消费日历</h2>
               <span id="calendarMonthLabel" class="panel-hint"></span>
@@ -214,11 +278,6 @@
             <div id="selectedDayList" class="calendar-day-list"></div>
 
             <div class="section-heading">
-              <h2>星期分布</h2>
-            </div>
-            <div id="weekdayList" class="bar-list"></div>
-
-            <div class="section-heading">
               <h2>分类排行</h2>
             </div>
             <div id="rankList" class="rank-list"></div>
@@ -227,7 +286,7 @@
 
         <section id="settingsView" class="view" aria-label="预算设置">
           <form id="settingsForm" class="settings-panel">
-            <details class="settings-group" open>
+            <details class="settings-group">
               <summary>
                 <span class="settings-group-icon" aria-hidden="true">🎀</span>
                 <span>
@@ -268,20 +327,15 @@
                 </span>
               </summary>
               <div class="settings-group-body">
-                <div class="two-column">
-                  <label>
-                    <span>成员 1</span>
-                    <input id="memberOneInput" maxlength="12" required>
-                  </label>
-                  <label>
-                    <span>成员 2</span>
-                    <input id="memberTwoInput" maxlength="12" required>
-                  </label>
+                <div class="section-heading settings-inner-heading">
+                  <h2>成员列表</h2>
+                  <button id="addMemberButton" class="ghost-button" type="button">新增成员</button>
                 </div>
+                <div id="memberRows" class="member-settings-list"></div>
               </div>
             </details>
 
-            <details class="settings-group" open>
+            <details class="settings-group">
               <summary>
                 <span class="settings-group-icon" aria-hidden="true">🏷</span>
                 <span>
@@ -295,6 +349,45 @@
                   <button id="addCategoryButton" class="ghost-button" type="button">新增分类</button>
                 </div>
                 <div id="budgetRows" class="budget-rows"></div>
+              </div>
+            </details>
+
+            <details class="settings-group">
+              <summary>
+                <span class="settings-group-icon" aria-hidden="true">💾</span>
+                <span>
+                  <strong>数据备份</strong>
+                  <small>导出账本备份或恢复历史数据</small>
+                </span>
+              </summary>
+              <div class="settings-group-body">
+                <div class="backup-actions">
+                  <a id="jsonExportLink" class="ghost-link" href="/api/export.json" download="money-ledger-backup.json">导出 JSON</a>
+                  <label class="backup-import">
+                    <span>导入备份</span>
+                    <input id="importBackupInput" type="file" accept=".json,application/json">
+                  </label>
+                </div>
+                <p class="backup-hint">导入会覆盖当前所有成员、分类、预算和记录。</p>
+              </div>
+            </details>
+
+            <details class="settings-group danger-group">
+              <summary>
+                <span class="settings-group-icon" aria-hidden="true">!</span>
+                <span>
+                  <strong>危险操作</strong>
+                  <small>清空账本中的所有数据</small>
+                </span>
+              </summary>
+              <div class="settings-group-body">
+                <div class="danger-zone">
+                  <div>
+                    <strong>清除全部数据</strong>
+                    <p>会删除所有成员、分类、预算和记账记录，建议先导出 JSON 备份。</p>
+                  </div>
+                  <button id="clearAllDataButton" class="danger-button danger-button-strong" type="button">清除全部数据</button>
+                </div>
               </div>
             </details>
 

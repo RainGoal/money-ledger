@@ -4,6 +4,9 @@ const state = {
   selectedMember: null,
   selectedStatsDate: null,
   selectedExpenseId: null,
+  detailFilters: { query: "", categoryId: "", member: "" },
+  entryTemplates: [],
+  trendStates: [],
   theme: normalizeTheme(localStorage.getItem("ledgerTheme")),
   token: localStorage.getItem("ledgerToken") || ""
 };
@@ -34,8 +37,15 @@ const elements = {
   amountInput: document.querySelector("#amountInput"),
   dateInput: document.querySelector("#dateInput"),
   noteInput: document.querySelector("#noteInput"),
+  saveTemplateButton: document.querySelector("#saveTemplateButton"),
+  templateList: document.querySelector("#templateList"),
   entryFeedback: document.querySelector("#entryFeedback"),
   recentList: document.querySelector("#recentList"),
+  detailSearchInput: document.querySelector("#detailSearchInput"),
+  detailCategoryFilter: document.querySelector("#detailCategoryFilter"),
+  detailMemberFilter: document.querySelector("#detailMemberFilter"),
+  detailFilterStatus: document.querySelector("#detailFilterStatus"),
+  detailFilterReset: document.querySelector("#detailFilterReset"),
   detailListPane: document.querySelector("#detailListPane"),
   recordDetailForm: document.querySelector("#recordDetailForm"),
   recordBackButton: document.querySelector("#recordBackButton"),
@@ -51,21 +61,32 @@ const elements = {
   copySummaryButton: document.querySelector("#copySummaryButton"),
   settingsForm: document.querySelector("#settingsForm"),
   settingsFeedback: document.querySelector("#settingsFeedback"),
-  memberOneInput: document.querySelector("#memberOneInput"),
-  memberTwoInput: document.querySelector("#memberTwoInput"),
+  memberRows: document.querySelector("#memberRows"),
+  addMemberButton: document.querySelector("#addMemberButton"),
   budgetRows: document.querySelector("#budgetRows"),
   addCategoryButton: document.querySelector("#addCategoryButton"),
+  jsonExportLink: document.querySelector("#jsonExportLink"),
+  importBackupInput: document.querySelector("#importBackupInput"),
+  clearAllDataButton: document.querySelector("#clearAllDataButton"),
   avgDailySpend: document.querySelector("#avgDailySpend"),
   topCategoryName: document.querySelector("#topCategoryName"),
   topCategoryAmount: document.querySelector("#topCategoryAmount"),
   recordCount: document.querySelector("#recordCount"),
   activeDays: document.querySelector("#activeDays"),
+  trendRangeLabel: document.querySelector("#trendRangeLabel"),
+  monthDeltaAmount: document.querySelector("#monthDeltaAmount"),
+  monthDeltaLabel: document.querySelector("#monthDeltaLabel"),
+  sixMonthAverage: document.querySelector("#sixMonthAverage"),
+  sixMonthTotal: document.querySelector("#sixMonthTotal"),
+  monthlyTrendList: document.querySelector("#monthlyTrendList"),
+  memberCompareLabel: document.querySelector("#memberCompareLabel"),
+  memberCompareList: document.querySelector("#memberCompareList"),
+  categoryCompareList: document.querySelector("#categoryCompareList"),
   calendarMonthLabel: document.querySelector("#calendarMonthLabel"),
   calendarGrid: document.querySelector("#calendarGrid"),
   selectedDayTitle: document.querySelector("#selectedDayTitle"),
   selectedDayTotal: document.querySelector("#selectedDayTotal"),
   selectedDayList: document.querySelector("#selectedDayList"),
-  weekdayList: document.querySelector("#weekdayList"),
   rankList: document.querySelector("#rankList"),
   successPopup: document.querySelector("#successPopup"),
   successPopupMessage: document.querySelector("#successPopupMessage")
@@ -125,6 +146,7 @@ const CUTE_TAB_SYMBOLS = {
 const HELLO_KITTY_ICON = "/hello-kitty-red.jpg";
 
 const CUSTOM_THEME_STORAGE_KEY = "ledgerCustomTheme";
+const ENTRY_TEMPLATE_STORAGE_KEY = "ledgerEntryTemplates";
 const CUSTOM_TAB_SLOTS = [
   { key: "dashboard", label: "首页图标" },
   { key: "details", label: "明细图标" },
@@ -152,6 +174,7 @@ const CROP_PRESETS = {
 const CATEGORY_ICON_FALLBACKS = ["🍚", "🧴", "🚇", "🎮", "🏠", "💝", "🧾"];
 
 state.customTheme = loadCustomTheme();
+state.entryTemplates = loadEntryTemplates();
 let successPopupTimer = null;
 
 function cuteTabIcon(view) {
@@ -223,6 +246,30 @@ function loadCustomTheme() {
 
 function saveCustomTheme() {
   localStorage.setItem(CUSTOM_THEME_STORAGE_KEY, JSON.stringify(state.customTheme));
+}
+
+function loadEntryTemplates() {
+  try {
+    const value = JSON.parse(localStorage.getItem(ENTRY_TEMPLATE_STORAGE_KEY) || "[]");
+    if (!Array.isArray(value)) return [];
+    return value
+      .map(template => ({
+        id: String(template.id || cryptoId()),
+        amount: Number(template.amount || 0),
+        categoryId: String(template.categoryId || "").trim(),
+        member: String(template.member || "").trim(),
+        note: String(template.note || "").trim().slice(0, 80),
+        createdAt: String(template.createdAt || "")
+      }))
+      .filter(template => template.amount > 0 && template.categoryId && template.member)
+      .slice(0, 12);
+  } catch {
+    return [];
+  }
+}
+
+function saveEntryTemplates() {
+  localStorage.setItem(ENTRY_TEMPLATE_STORAGE_KEY, JSON.stringify(state.entryTemplates));
 }
 
 function customTabIcon(view) {
@@ -650,6 +697,8 @@ const API_ERROR_MESSAGES = {
   invalid_category: "分类不存在，请检查分类设置",
   invalid_member: "记账人员不存在，请检查成员设置",
   invalid_json: "请求数据格式错误",
+  invalid_import: "备份文件格式不正确",
+  invalid_confirmation: "确认信息不正确",
   unauthorized: "未授权"
 };
 
@@ -765,6 +814,31 @@ function monthParts(month) {
   return { year, monthNumber, monthIndex: monthNumber - 1 };
 }
 
+function addMonths(month, delta) {
+  const { year, monthIndex } = monthParts(month);
+  const date = new Date(year, monthIndex + delta, 1);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function recentMonths(month, count) {
+  return Array.from({ length: count }, (_, index) => addMonths(month, index - count + 1));
+}
+
+async function loadTrendStates(month) {
+  const months = recentMonths(month, 6);
+  return Promise.all(months.map(item => api(`/api/state?month=${encodeURIComponent(item)}`)));
+}
+
+function replaceTrendState(nextState) {
+  const replaced = state.trendStates.map(item => item.month === nextState.month ? nextState : item);
+  state.trendStates = replaced.some(item => item === nextState) ? replaced : [...replaced.slice(1), nextState];
+}
+
+function monthLabel(month) {
+  const { monthNumber } = monthParts(month);
+  return `${monthNumber}月`;
+}
+
 function dateInMonth(month, day) {
   return `${month}-${String(day).padStart(2, "0")}`;
 }
@@ -812,6 +886,9 @@ function renderSummary() {
   elements.totalMeter.style.width = `${Math.min(totals.percent, 100)}%`;
   elements.totalMeter.style.background = meterColor(totals.percent);
   elements.exportLink.href = `/api/export.csv?month=${encodeURIComponent(state.data.month)}${state.token ? `&token=${encodeURIComponent(state.token)}` : ""}`;
+  if (elements.jsonExportLink) {
+    elements.jsonExportLink.href = `/api/export.json${state.token ? `?token=${encodeURIComponent(state.token)}` : ""}`;
+  }
 }
 
 function renderCategories() {
@@ -884,12 +961,94 @@ function renderEntryControls() {
   });
 }
 
+function renderEntryTemplates() {
+  elements.templateList.innerHTML = "";
+
+  if (state.entryTemplates.length === 0) {
+    elements.templateList.innerHTML = `<div class="template-empty">暂无模板</div>`;
+    return;
+  }
+
+  state.entryTemplates.forEach(template => {
+    const category = state.data.categories.find(item => item.id === template.categoryId);
+    const title = template.note || category?.name || "常用支出";
+    const item = document.createElement("div");
+    item.className = "template-item";
+    item.innerHTML = `
+      <button class="template-apply" type="button" data-template-id="${escapeAttribute(template.id)}">
+        <strong>${escapeHtml(title)}</strong>
+        <span>${escapeHtml(category ? categoryIcon(category) : "🧾")} ${money(template.amount)} · ${escapeHtml(template.member)}</span>
+      </button>
+      <button class="template-delete" type="button" data-template-delete="${escapeAttribute(template.id)}" aria-label="删除${escapeAttribute(title)}模板">×</button>
+    `;
+    elements.templateList.appendChild(item);
+  });
+}
+
+function renderDetailFilters() {
+  if (elements.detailSearchInput.value !== state.detailFilters.query) {
+    elements.detailSearchInput.value = state.detailFilters.query;
+  }
+
+  if (!state.data.categories.some(category => category.id === state.detailFilters.categoryId)) {
+    state.detailFilters.categoryId = "";
+  }
+  if (!state.data.members.includes(state.detailFilters.member)) {
+    state.detailFilters.member = "";
+  }
+
+  elements.detailCategoryFilter.innerHTML = "";
+  elements.detailCategoryFilter.appendChild(option("全部分类", "", state.detailFilters.categoryId));
+  state.data.categories.forEach((category, index) => {
+    elements.detailCategoryFilter.appendChild(
+      option(`${categoryIcon(category, index)} ${category.name}`, category.id, state.detailFilters.categoryId)
+    );
+  });
+
+  elements.detailMemberFilter.innerHTML = "";
+  elements.detailMemberFilter.appendChild(option("全部成员", "", state.detailFilters.member));
+  state.data.members.forEach(member => {
+    elements.detailMemberFilter.appendChild(option(member, member, state.detailFilters.member));
+  });
+
+  elements.detailFilterStatus.textContent = hasDetailFilters() ? "已启用" : "未启用";
+}
+
+function hasDetailFilters() {
+  return Boolean(
+    state.detailFilters.query.trim() ||
+    state.detailFilters.categoryId ||
+    state.detailFilters.member
+  );
+}
+
+function detailSearchText(expense) {
+  return [
+    expense.date,
+    expense.member,
+    expense.categoryName,
+    expense.note,
+    money(expense.amount),
+    String(expense.amount || "")
+  ].join(" ").toLowerCase();
+}
+
+function filteredExpenses(expenses) {
+  const query = state.detailFilters.query.trim().toLowerCase();
+  return expenses.filter(expense => {
+    if (state.detailFilters.categoryId && expense.categoryId !== state.detailFilters.categoryId) return false;
+    if (state.detailFilters.member && expense.member !== state.detailFilters.member) return false;
+    if (query && !detailSearchText(expense).includes(query)) return false;
+    return true;
+  });
+}
+
 function renderRecent() {
   elements.recentList.innerHTML = "";
-  const groups = groupExpensesByDate(state.data.expenses.slice());
+  const groups = groupExpensesByDate(filteredExpenses(state.data.expenses).slice());
 
   if (groups.length === 0) {
-    elements.recentList.innerHTML = `<div class="empty-state">本月还没有记录</div>`;
+    elements.recentList.innerHTML = `<div class="empty-state">${hasDetailFilters() ? "没有符合筛选的记录" : "本月还没有记录"}</div>`;
     return;
   }
 
@@ -997,7 +1156,10 @@ function renderRecordDetail() {
   });
 
   elements.recordMemberSelect.innerHTML = "";
-  state.data.members.forEach(member => {
+  const memberOptions = state.data.members.includes(expense.member)
+    ? state.data.members
+    : [expense.member, ...state.data.members];
+  memberOptions.forEach(member => {
     elements.recordMemberSelect.appendChild(option(member, member, expense.member));
   });
 }
@@ -1075,6 +1237,106 @@ function renderSelectedDayDetails(dayMap) {
   });
 }
 
+function memberTotalsFor(expenses) {
+  const totals = new Map(state.data.members.map(member => [member, 0]));
+  expenses.forEach(expense => {
+    totals.set(expense.member, roundMoney((totals.get(expense.member) || 0) + Number(expense.amount || 0)));
+  });
+  return totals;
+}
+
+function renderMonthlyTrend() {
+  const states = state.trendStates.length ? state.trendStates : [state.data];
+  const totals = states.map(item => item.totals.spent);
+  const max = Math.max(...totals, 1);
+  const current = states[states.length - 1] || state.data;
+  const previous = states[states.length - 2];
+  const total = roundMoney(totals.reduce((sum, amount) => sum + amount, 0));
+  const average = states.length > 0 ? roundMoney(total / states.length) : 0;
+  const delta = previous ? roundMoney(current.totals.spent - previous.totals.spent) : 0;
+  const deltaText = delta > 0 ? `多花 ${money(delta)}` : delta < 0 ? `少花 ${money(Math.abs(delta))}` : "持平";
+
+  elements.trendRangeLabel.textContent = states.length > 1
+    ? `${states[0].month} - ${current.month}`
+    : current.month;
+  elements.monthDeltaAmount.textContent = previous ? `${delta > 0 ? "+" : delta < 0 ? "-" : ""}${money(Math.abs(delta))}` : "-";
+  elements.monthDeltaAmount.classList.toggle("is-up", delta > 0);
+  elements.monthDeltaAmount.classList.toggle("is-down", delta < 0);
+  elements.monthDeltaLabel.textContent = previous ? `比 ${monthLabel(previous.month)} ${deltaText}` : "暂无上月数据";
+  elements.sixMonthAverage.textContent = money(average);
+  elements.sixMonthTotal.textContent = `合计 ${money(total)}`;
+
+  elements.monthlyTrendList.innerHTML = "";
+  states.forEach(item => {
+    const percent = Math.max(4, Math.round((item.totals.spent / max) * 100));
+    const row = document.createElement("div");
+    row.className = "monthly-trend-row";
+    row.innerHTML = `
+      <span>${escapeHtml(monthLabel(item.month))}</span>
+      <div class="trend-track"><span style="width:${percent}%"></span></div>
+      <strong>${money(item.totals.spent)}</strong>
+    `;
+    elements.monthlyTrendList.appendChild(row);
+  });
+}
+
+function renderMemberCompare() {
+  const totals = memberTotalsFor(state.data.expenses);
+  const max = Math.max(...Array.from(totals.values()), 1);
+  elements.memberCompareLabel.textContent = state.data.month;
+  elements.memberCompareList.innerHTML = "";
+
+  state.data.members.forEach(member => {
+    const amount = totals.get(member) || 0;
+    const percent = Math.max(amount > 0 ? 5 : 0, Math.round((amount / max) * 100));
+    const row = document.createElement("div");
+    row.className = "member-compare-row";
+    row.innerHTML = `
+      <div>
+        <strong>${escapeHtml(member)}</strong>
+        <span>${money(amount)}</span>
+      </div>
+      <div class="trend-track"><span style="width:${percent}%"></span></div>
+    `;
+    elements.memberCompareList.appendChild(row);
+  });
+}
+
+function renderCategoryCompare() {
+  const states = state.trendStates.length ? state.trendStates : [state.data];
+  const current = states[states.length - 1] || state.data;
+  const previous = states[states.length - 2];
+  const previousCategories = new Map((previous?.categories || []).map(category => [category.id, category]));
+  const categories = current.categories
+    .slice()
+    .sort((a, b) => b.spent - a.spent)
+    .slice(0, 5);
+
+  elements.categoryCompareList.innerHTML = "";
+  if (categories.length === 0) {
+    elements.categoryCompareList.innerHTML = `<div class="empty-state">暂无分类</div>`;
+    return;
+  }
+
+  categories.forEach(category => {
+    const previousSpent = previousCategories.get(category.id)?.spent || 0;
+    const delta = roundMoney(category.spent - previousSpent);
+    const deltaLabel = previous ? (delta > 0 ? `+${money(delta)}` : delta < 0 ? `-${money(Math.abs(delta))}` : "持平") : "暂无上月";
+    const row = document.createElement("div");
+    row.className = "category-compare-row";
+    row.style.setProperty("--accent", category.color || "#27845b");
+    row.innerHTML = `
+      <span class="category-icon" aria-hidden="true">${escapeHtml(categoryIcon(category))}</span>
+      <div>
+        <strong>${escapeHtml(category.name)}</strong>
+        <small>本月 ${money(category.spent)} · 上月 ${money(previousSpent)}</small>
+      </div>
+      <em class="${delta > 0 ? "is-up" : delta < 0 ? "is-down" : ""}">${escapeHtml(deltaLabel)}</em>
+    `;
+    elements.categoryCompareList.appendChild(row);
+  });
+}
+
 function renderStats() {
   const expenses = state.data.expenses;
   const dayMap = calendarDayMap(expenses);
@@ -1094,40 +1356,17 @@ function renderStats() {
   elements.topCategoryAmount.textContent = topCategory ? money(topCategory.spent) : "0.00";
   elements.recordCount.textContent = String(expenses.length);
   elements.activeDays.textContent = String(activeDayCount);
+  renderMonthlyTrend();
+  renderMemberCompare();
+  renderCategoryCompare();
   renderCalendar(dayMap);
   renderSelectedDayDetails(dayMap);
-
-  const weekdayTotals = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"].map(label => ({ label, amount: 0 }));
-  const weekdayIndex = new Map(weekdayTotals.map((item, index) => [item.label, index]));
-  expenses.forEach(expense => {
-    const label = weekdayLabel(expense.date);
-    const index = weekdayIndex.get(label);
-    if (index !== undefined) {
-      weekdayTotals[index].amount = roundMoney(weekdayTotals[index].amount + Number(expense.amount || 0));
-    }
-  });
-  renderBarList(elements.weekdayList, weekdayTotals);
 
   const ranks = state.data.categories
     .slice()
     .sort((a, b) => b.spent - a.spent)
     .map(category => ({ label: category.name, amount: category.spent, color: category.color, icon: categoryIcon(category) }));
   renderRankList(ranks);
-}
-
-function renderBarList(container, items) {
-  container.innerHTML = "";
-  const max = Math.max(...items.map(item => item.amount), 1);
-  items.forEach(item => {
-    const row = document.createElement("div");
-    row.className = "bar-row";
-    row.innerHTML = `
-      <span>${escapeHtml(item.label)}</span>
-      <div class="bar-track"><span style="width:${Math.round((item.amount / max) * 100)}%"></span></div>
-      <strong>${money(item.amount)}</strong>
-    `;
-    container.appendChild(row);
-  });
 }
 
 function renderRankList(items) {
@@ -1151,9 +1390,24 @@ function renderRankList(items) {
   });
 }
 
+function createMemberRow(member = "") {
+  const row = document.createElement("div");
+  row.className = "member-settings-row";
+  row.innerHTML = `
+    <label>
+      <span>成员名称</span>
+      <input class="member-name-input" value="${escapeAttribute(member)}" maxlength="12" required>
+    </label>
+    <button class="member-remove-button" type="button" aria-label="删除成员">删除</button>
+  `;
+  return row;
+}
+
 function renderSettings() {
-  elements.memberOneInput.value = state.data.members[0] || "";
-  elements.memberTwoInput.value = state.data.members[1] || "";
+  elements.memberRows.innerHTML = "";
+  state.data.members.forEach(member => {
+    elements.memberRows.appendChild(createMemberRow(member));
+  });
   elements.budgetRows.innerHTML = "";
 
   state.data.categories.forEach((category, index) => {
@@ -1187,6 +1441,8 @@ function render() {
   renderSummary();
   renderCategories();
   renderEntryControls();
+  renderEntryTemplates();
+  renderDetailFilters();
   renderRecent();
   renderRecordDetail();
   renderStats();
@@ -1195,7 +1451,9 @@ function render() {
 
 async function loadState() {
   const month = elements.monthInput.value || today().month;
-  state.data = await api(`/api/state?month=${encodeURIComponent(month)}`);
+  const states = await loadTrendStates(month);
+  state.trendStates = states;
+  state.data = states[states.length - 1];
   elements.monthInput.value = state.data.month;
   elements.dateInput.value = state.data.month === today().month ? state.data.today : `${state.data.month}-01`;
   render();
@@ -1219,6 +1477,7 @@ async function submitExpense(event) {
       body: JSON.stringify(payload)
     });
     state.data = result.state;
+    replaceTrendState(result.state);
     elements.monthInput.value = state.data.month;
     elements.amountInput.value = "";
     elements.noteInput.value = "";
@@ -1232,12 +1491,100 @@ async function submitExpense(event) {
   }
 }
 
+function collectCurrentTemplate() {
+  const amount = Number(String(elements.amountInput.value).replace(",", "."));
+  const categoryId = state.selectedCategoryId;
+  const member = state.selectedMember;
+  const note = elements.noteInput.value.trim();
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("先填一个有效金额");
+  }
+  if (!state.data.categories.some(category => category.id === categoryId)) {
+    throw new Error("请选择分类");
+  }
+  if (!state.data.members.includes(member)) {
+    throw new Error("请选择成员");
+  }
+
+  return {
+    amount: roundMoney(amount),
+    categoryId,
+    member,
+    note
+  };
+}
+
+function saveCurrentTemplate() {
+  try {
+    const template = {
+      id: cryptoId(),
+      ...collectCurrentTemplate(),
+      createdAt: new Date().toISOString()
+    };
+    state.entryTemplates = [
+      template,
+      ...state.entryTemplates.filter(item =>
+        item.amount !== template.amount ||
+        item.categoryId !== template.categoryId ||
+        item.member !== template.member ||
+        item.note !== template.note
+      )
+    ].slice(0, 12);
+    saveEntryTemplates();
+    renderEntryTemplates();
+    elements.entryFeedback.textContent = "已保存为常用模板";
+  } catch (error) {
+    elements.entryFeedback.textContent = error.message;
+  }
+}
+
+function applyEntryTemplate(id) {
+  const template = state.entryTemplates.find(item => item.id === id);
+  if (!template) return;
+
+  elements.amountInput.value = template.amount;
+  elements.noteInput.value = template.note || "";
+  if (state.data.categories.some(category => category.id === template.categoryId)) {
+    state.selectedCategoryId = template.categoryId;
+  }
+  if (state.data.members.includes(template.member)) {
+    state.selectedMember = template.member;
+  }
+  renderEntryControls();
+  elements.entryFeedback.textContent = "已填入常用模板";
+}
+
+function deleteEntryTemplate(id) {
+  state.entryTemplates = state.entryTemplates.filter(template => template.id !== id);
+  saveEntryTemplates();
+  renderEntryTemplates();
+  elements.entryFeedback.textContent = "已删除模板";
+}
+
+function handleTemplateClick(event) {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+
+  const deleteButton = target.closest("[data-template-delete]");
+  if (deleteButton) {
+    deleteEntryTemplate(deleteButton.dataset.templateDelete);
+    return;
+  }
+
+  const applyButton = target.closest("[data-template-id]");
+  if (applyButton) {
+    applyEntryTemplate(applyButton.dataset.templateId);
+  }
+}
+
 async function deleteExpense(id) {
   if (!window.confirm("删除这条记录？")) return;
   const result = await api(`/api/expenses/${encodeURIComponent(id)}?month=${encodeURIComponent(state.data.month)}`, {
     method: "DELETE"
   });
   state.data = result.state;
+  replaceTrendState(result.state);
   state.selectedExpenseId = null;
   render();
   showRecordList();
@@ -1254,6 +1601,7 @@ async function saveRecordDetail(event) {
       body: JSON.stringify(collectRecordDetail())
     });
     state.data = result.state;
+    replaceTrendState(result.state);
     state.selectedExpenseId = null;
     render();
     showSuccessPopup("保存成功");
@@ -1279,19 +1627,36 @@ function collectBudgetRows() {
   }));
 }
 
+function collectMemberRows() {
+  const seen = new Set();
+  return Array.from(elements.memberRows.querySelectorAll(".member-name-input"))
+    .map(input => input.value.trim())
+    .filter(member => {
+      if (!member || seen.has(member)) return false;
+      seen.add(member);
+      return true;
+    });
+}
+
 async function saveSettings(event) {
   event.preventDefault();
   elements.settingsFeedback.textContent = "保存中...";
   try {
+    const members = collectMemberRows();
+    if (members.length === 0) {
+      throw new Error("请至少保留一个成员");
+    }
+
     const result = await api("/api/budgets", {
       method: "PUT",
       body: JSON.stringify({
         month: elements.monthInput.value,
-        members: [elements.memberOneInput.value, elements.memberTwoInput.value],
+        members,
         categories: collectBudgetRows()
       })
     });
     state.data = result;
+    replaceTrendState(result);
     state.selectedCategoryId = state.data.categories[0]?.id || null;
     state.selectedMember = state.data.members[0] || null;
     elements.settingsFeedback.textContent = "已保存";
@@ -1330,6 +1695,34 @@ function addCategoryRow() {
   row.querySelector(".budget-name").focus();
 }
 
+function addMemberRow() {
+  if (elements.memberRows.querySelectorAll(".member-settings-row").length >= 6) {
+    elements.settingsFeedback.textContent = "最多支持 6 个成员";
+    return;
+  }
+
+  const row = createMemberRow("");
+  elements.memberRows.appendChild(row);
+  row.querySelector(".member-name-input").focus();
+}
+
+function handleMemberRowsClick(event) {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+
+  const button = target.closest(".member-remove-button");
+  if (!button) return;
+
+  const rows = Array.from(elements.memberRows.querySelectorAll(".member-settings-row"));
+  if (rows.length <= 1) {
+    elements.settingsFeedback.textContent = "请至少保留一个成员";
+    return;
+  }
+
+  button.closest(".member-settings-row")?.remove();
+  elements.settingsFeedback.textContent = "成员已移除，保存后生效";
+}
+
 function handleCalendarClick(event) {
   const target = event.target;
   if (!(target instanceof Element)) return;
@@ -1337,6 +1730,82 @@ function handleCalendarClick(event) {
   if (!button) return;
   state.selectedStatsDate = button.dataset.calendarDate;
   renderStats();
+}
+
+function handleDetailFilterChange() {
+  state.detailFilters.query = elements.detailSearchInput.value;
+  state.detailFilters.categoryId = elements.detailCategoryFilter.value;
+  state.detailFilters.member = elements.detailMemberFilter.value;
+  elements.detailFilterStatus.textContent = hasDetailFilters() ? "已启用" : "未启用";
+  renderRecent();
+}
+
+function resetDetailFilters() {
+  state.detailFilters = { query: "", categoryId: "", member: "" };
+  renderDetailFilters();
+  renderRecent();
+}
+
+async function importBackup(event) {
+  const input = event.target;
+  if (!(input instanceof HTMLInputElement)) return;
+  const file = input.files?.[0];
+  if (!file) return;
+
+  try {
+    if (!window.confirm("导入备份会覆盖当前所有数据，继续？")) return;
+    elements.settingsFeedback.textContent = "导入中...";
+    const text = await file.text();
+    const result = await api(`/api/import.json?month=${encodeURIComponent(elements.monthInput.value || today().month)}`, {
+      method: "POST",
+      body: text
+    });
+    state.data = result.state;
+    state.trendStates = await loadTrendStates(result.state.month);
+    state.selectedExpenseId = null;
+    state.selectedCategoryId = state.data.categories[0]?.id || null;
+    state.selectedMember = state.data.members[0] || null;
+    elements.monthInput.value = state.data.month;
+    render();
+    elements.settingsFeedback.textContent = "导入成功";
+    showSuccessPopup("导入成功");
+  } catch (error) {
+    elements.settingsFeedback.textContent = error.message;
+  } finally {
+    input.value = "";
+  }
+}
+
+async function clearAllData() {
+  if (!window.confirm("确定要清除全部数据吗？这个操作不能撤销。")) return;
+  const typed = window.prompt("请再次确认：输入“清空”后才会清除全部数据");
+  if (typed !== "清空") {
+    elements.settingsFeedback.textContent = "已取消清空";
+    return;
+  }
+
+  try {
+    elements.settingsFeedback.textContent = "清空中...";
+    const result = await api(`/api/clear?month=${encodeURIComponent(elements.monthInput.value || today().month)}`, {
+      method: "POST",
+      body: JSON.stringify({ confirm: "CLEAR_ALL" })
+    });
+    state.data = result.state;
+    state.trendStates = await loadTrendStates(result.state.month);
+    state.selectedExpenseId = null;
+    state.selectedCategoryId = state.data.categories[0]?.id || null;
+    state.selectedMember = state.data.members[0] || null;
+    state.selectedStatsDate = null;
+    state.detailFilters = { query: "", categoryId: "", member: "" };
+    state.entryTemplates = [];
+    saveEntryTemplates();
+    elements.monthInput.value = state.data.month;
+    render();
+    elements.settingsFeedback.textContent = "已清空全部数据";
+    showSuccessPopup("已清空");
+  } catch (error) {
+    elements.settingsFeedback.textContent = error.message;
+  }
 }
 
 async function copySummary() {
@@ -1392,11 +1861,21 @@ function bindEvents() {
   document.addEventListener("keydown", handleCropKeyDown);
   elements.monthInput.addEventListener("change", loadState);
   elements.expenseForm.addEventListener("submit", submitExpense);
+  elements.saveTemplateButton.addEventListener("click", saveCurrentTemplate);
+  elements.templateList.addEventListener("click", handleTemplateClick);
+  elements.detailSearchInput.addEventListener("input", handleDetailFilterChange);
+  elements.detailCategoryFilter.addEventListener("change", handleDetailFilterChange);
+  elements.detailMemberFilter.addEventListener("change", handleDetailFilterChange);
+  elements.detailFilterReset.addEventListener("click", resetDetailFilters);
   elements.recordDetailForm.addEventListener("submit", saveRecordDetail);
   elements.recordBackButton.addEventListener("click", showRecordList);
   elements.recordDeleteButton.addEventListener("click", deleteSelectedExpense);
   elements.settingsForm.addEventListener("submit", saveSettings);
+  elements.addMemberButton.addEventListener("click", addMemberRow);
+  elements.memberRows.addEventListener("click", handleMemberRowsClick);
   elements.addCategoryButton.addEventListener("click", addCategoryRow);
+  elements.importBackupInput.addEventListener("change", importBackup);
+  elements.clearAllDataButton.addEventListener("click", clearAllData);
   elements.calendarGrid.addEventListener("click", handleCalendarClick);
   elements.copySummaryButton.addEventListener("click", copySummary);
 }

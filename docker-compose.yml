@@ -1,0 +1,12 @@
+services:
+  money-ledger:
+    build: .
+    container_name: money-ledger
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      PORT: "5173"
+      LEDGER_TOKEN: "${LEDGER_TOKEN:-}"
+    volumes:
+      - ./data:/app/data

@@ -4,6 +4,8 @@
 
 ## 本地运行
 
+需要 Node.js 22.13 或更高版本，服务端使用 Node 内置 SQLite。
+
 ```powershell
 npm start
 ```
@@ -25,6 +27,40 @@ npm start
 ```
 
 然后用 Nginx、Caddy 或其他反向代理把你的域名转发到这个端口，并启用 HTTPS。iPhone 添加到主屏幕后即可按 PWA 使用。
+
+## Docker 部署
+
+服务器安装 Docker 后，在项目目录创建 `.env`，也可以直接复制 `.env.example` 后修改：
+
+```env
+LEDGER_TOKEN=change-this-token
+```
+
+启动：
+
+```bash
+docker compose up -d --build
+```
+
+默认地址：
+
+```text
+http://服务器IP:5173
+```
+
+数据会持久化到服务器项目目录的 `data/ledger.sqlite`。如果项目目录里已有旧版 `data/db.json`，首次启动会自动导入到 SQLite，并保留原 JSON 文件作为迁移前备份。如果你用 Nginx 或 Caddy 绑定域名，把域名反向代理到 `127.0.0.1:5173`，并开启 HTTPS。
+
+更新代码后重新部署：
+
+```bash
+docker compose up -d --build
+```
+
+查看日志：
+
+```bash
+docker compose logs -f
+```
 
 ## iOS 快捷指令录入
 
@@ -63,7 +99,7 @@ GET /api/summary?format=text
 所有数据保存在：
 
 ```text
-data/db.json
+data/ledger.sqlite
 ```
 
-建议把这个文件纳入服务器定时备份。
+建议把 `data` 目录纳入服务器定时备份。旧版 `data/db.json` 如果存在，会在首次启动时自动迁移到 SQLite，但不会被删除。

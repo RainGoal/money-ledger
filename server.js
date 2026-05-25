@@ -2,6 +2,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { DatabaseSync } = require("node:sqlite");
 
 const PORT = Number(process.env.PORT || 5173);
 const TOKEN = process.env.LEDGER_TOKEN || "";
@@ -9,6 +10,7 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, "public");
 const DATA_DIR = path.join(ROOT, "data");
 const DATA_FILE = path.join(DATA_DIR, "db.json");
+const SQLITE_FILE = path.join(DATA_DIR, "ledger.sqlite");
 const DEFAULT_CATEGORY_ICONS = ["🍚", "🧴", "🚇", "🎮", "🏠", "💝", "🧾"];
 
 const DEFAULT_DATA = {
@@ -46,6 +48,20 @@ function ensureDataFile() {
   }
 }
 
+function loadJsonDataFile() {
+  ensureDataFile();
+  const raw = fs.readFileSync(DATA_FILE, "utf8");
+  const data = JSON.parse(raw);
+  const normalized = {
+    members: Array.isArray(data.members) ? data.members : DEFAULT_DATA.members,
+    categories: Array.isArray(data.categories) ? data.categories : DEFAULT_DATA.categories,
+    monthlyBudgets: data.monthlyBudgets && typeof data.monthlyBudgets === "object" ? data.monthlyBudgets : {},
+    expenses: Array.isArray(data.expenses) ? data.expenses : []
+  };
+  ensureExpenseIds(normalized.expenses);
+  return normalized;
+}
+
 function ensureExpenseIds(expenses) {
   const seen = new Set();
   let changed = false;
@@ -71,25 +87,278 @@ function ensureExpenseIds(expenses) {
   return changed;
 }
 
-function loadData() {
-  ensureDataFile();
-  const raw = fs.readFileSync(DATA_FILE, "utf8");
-  const data = JSON.parse(raw);
-  const normalized = {
-    members: Array.isArray(data.members) ? data.members : DEFAULT_DATA.members,
-    categories: Array.isArray(data.categories) ? data.categories : DEFAULT_DATA.categories,
-    monthlyBudgets: data.monthlyBudgets && typeof data.monthlyBudgets === "object" ? data.monthlyBudgets : {},
-    expenses: Array.isArray(data.expenses) ? data.expenses : []
+const db = openDatabase();
+
+function openDatabase() {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  const database = new DatabaseSync(SQLITE_FILE);
+  database.exec("PRAGMA journal_mode = WAL");
+  database.exec("PRAGMA foreign_keys = ON");
+  database.exec("PRAGMA busy_timeout = 5000");
+  return database;
+}
+
+function initDatabase() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS metadata (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS members (
+      name TEXT PRIMARY KEY,
+      sort_order INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS categories (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      icon TEXT NOT NULL,
+      color TEXT NOT NULL,
+      default_limit REAL NOT NULL DEFAULT 0,
+      sort_order INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS monthly_budgets (
+      month TEXT NOT NULL,
+      category_id TEXT NOT NULL,
+      amount REAL NOT NULL DEFAULT 0,
+      PRIMARY KEY (month, category_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS expenses (
+      id TEXT PRIMARY KEY,
+      date TEXT NOT NULL,
+      member TEXT NOT NULL,
+      category_id TEXT NOT NULL,
+      amount REAL NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
+    CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category_id);
+    CREATE INDEX IF NOT EXISTS idx_expenses_member ON expenses(member);
+  `);
+
+  seedDatabaseIfNeeded();
+}
+
+function getMetadata(key) {
+  return db.prepare("SELECT value FROM metadata WHERE key = ?").get(key)?.value || "";
+}
+
+function setMetadata(key, value) {
+  db.prepare(`
+    INSERT INTO metadata (key, value)
+    VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `).run(key, String(value));
+}
+
+function runTransaction(callback) {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const result = callback();
+    db.exec("COMMIT");
+    return result;
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+}
+
+function seedDatabaseIfNeeded() {
+  const hasSchema = getMetadata("schemaVersion") === "1";
+  if (hasSchema) return;
+
+  const source = fs.existsSync(DATA_FILE) ? loadJsonDataFile() : DEFAULT_DATA;
+  replaceAllData(source);
+  setMetadata("schemaVersion", "1");
+  setMetadata("migratedFromJsonAt", new Date().toISOString());
+}
+
+function serializeData() {
+  const data = {
+    members: [],
+    categories: [],
+    monthlyBudgets: {},
+    expenses: []
   };
-  if (ensureExpenseIds(normalized.expenses)) saveData(normalized);
+
+  data.members = db.prepare("SELECT name FROM members ORDER BY sort_order, name").all().map(row => row.name);
+  data.categories = db.prepare(`
+    SELECT id, name, icon, color, default_limit AS "limit"
+    FROM categories
+    ORDER BY sort_order, id
+  `).all().map(row => ({
+    id: row.id,
+    name: row.name,
+    icon: row.icon,
+    color: row.color,
+    limit: roundMoney(row.limit)
+  }));
+
+  db.prepare(`
+    SELECT month, category_id AS categoryId, amount
+    FROM monthly_budgets
+    ORDER BY month, category_id
+  `).all().forEach(row => {
+    if (!data.monthlyBudgets[row.month]) data.monthlyBudgets[row.month] = {};
+    data.monthlyBudgets[row.month][row.categoryId] = roundMoney(row.amount);
+  });
+
+  data.expenses = db.prepare(`
+    SELECT
+      id,
+      date,
+      member,
+      category_id AS categoryId,
+      amount,
+      note,
+      created_at AS createdAt,
+      updated_at AS updatedAt
+    FROM expenses
+    ORDER BY date DESC, created_at DESC
+  `).all().map(row => {
+    const expense = {
+      id: row.id,
+      date: row.date,
+      member: row.member,
+      categoryId: row.categoryId,
+      amount: roundMoney(row.amount),
+      note: row.note || "",
+      createdAt: row.createdAt
+    };
+    if (row.updatedAt) expense.updatedAt = row.updatedAt;
+    return expense;
+  });
+
+  return data;
+}
+
+function loadData() {
+  return serializeData();
+}
+
+function replaceAllData(input) {
+  const normalized = normalizeImportedData(input) || normalizeImportedData(DEFAULT_DATA);
+  runTransaction(() => {
+    db.exec(`
+      DELETE FROM expenses;
+      DELETE FROM monthly_budgets;
+      DELETE FROM categories;
+      DELETE FROM members;
+    `);
+    insertData(normalized);
+  });
   return normalized;
 }
 
-function saveData(data) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  const tmp = `${DATA_FILE}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
-  fs.renameSync(tmp, DATA_FILE);
+function insertData(data) {
+  const insertMember = db.prepare("INSERT INTO members (name, sort_order) VALUES (?, ?)");
+  data.members.forEach((member, index) => {
+    insertMember.run(member, index);
+  });
+
+  const insertCategory = db.prepare(`
+    INSERT INTO categories (id, name, icon, color, default_limit, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  data.categories.forEach((category, index) => {
+    insertCategory.run(category.id, category.name, category.icon, category.color, category.limit, index);
+  });
+
+  const insertBudget = db.prepare(`
+    INSERT INTO monthly_budgets (month, category_id, amount)
+    VALUES (?, ?, ?)
+  `);
+  Object.entries(data.monthlyBudgets || {}).forEach(([month, budgets]) => {
+    Object.entries(budgets || {}).forEach(([categoryId, amount]) => {
+      insertBudget.run(month, categoryId, roundMoney(amount));
+    });
+  });
+
+  const insertExpense = db.prepare(`
+    INSERT INTO expenses (id, date, member, category_id, amount, note, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  data.expenses.forEach(expense => {
+    insertExpense.run(
+      expense.id,
+      expense.date,
+      expense.member,
+      expense.categoryId,
+      expense.amount,
+      expense.note || "",
+      expense.createdAt,
+      expense.updatedAt || null
+    );
+  });
+}
+
+function insertExpense(expense) {
+  db.prepare(`
+    INSERT INTO expenses (id, date, member, category_id, amount, note, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    expense.id,
+    expense.date,
+    expense.member,
+    expense.categoryId,
+    expense.amount,
+    expense.note || "",
+    expense.createdAt,
+    expense.updatedAt || null
+  );
+}
+
+function updateExpense(id, patch) {
+  const result = db.prepare(`
+    UPDATE expenses
+    SET date = ?, member = ?, category_id = ?, amount = ?, note = ?, updated_at = ?
+    WHERE id = ?
+  `).run(
+    patch.date,
+    patch.member,
+    patch.categoryId,
+    patch.amount,
+    patch.note || "",
+    patch.updatedAt,
+    id
+  );
+  return result.changes > 0;
+}
+
+function deleteExpenseById(id) {
+  return db.prepare("DELETE FROM expenses WHERE id = ?").run(id).changes > 0;
+}
+
+function saveSettingsData(members, categories, month) {
+  runTransaction(() => {
+    db.exec("DELETE FROM members");
+    const insertMember = db.prepare("INSERT INTO members (name, sort_order) VALUES (?, ?)");
+    members.forEach((member, index) => insertMember.run(member, index));
+
+    db.exec("DELETE FROM categories");
+    const insertCategory = db.prepare(`
+      INSERT INTO categories (id, name, icon, color, default_limit, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    categories.forEach((category, index) => {
+      insertCategory.run(category.id, category.name, category.icon, category.color, category.limit, index);
+    });
+
+    db.prepare("DELETE FROM monthly_budgets WHERE month = ?").run(month);
+    const insertBudget = db.prepare(`
+      INSERT INTO monthly_budgets (month, category_id, amount)
+      VALUES (?, ?, ?)
+    `);
+    categories.forEach(category => {
+      insertBudget.run(month, category.id, category.limit);
+    });
+  });
 }
 
 function send(res, status, body, contentType = "application/json; charset=utf-8") {
@@ -382,6 +651,84 @@ function exportCsv(state) {
   return rows.map(row => row.map(csvEscape).join(",")).join("\n");
 }
 
+function normalizeMonthlyBudgets(input, categories) {
+  if (!input || typeof input !== "object") return {};
+  const budgets = {};
+
+  Object.entries(input).forEach(([month, value]) => {
+    if (!isValidMonth(month) || !value || typeof value !== "object") return;
+
+    const monthly = {};
+    categories.forEach(category => {
+      if (!Object.prototype.hasOwnProperty.call(value, category.id)) return;
+      const amount = roundMoney(value[category.id]);
+      if (Number.isFinite(amount) && amount >= 0) monthly[category.id] = amount;
+    });
+
+    if (Object.keys(monthly).length > 0) budgets[month] = monthly;
+  });
+
+  return budgets;
+}
+
+function normalizeTimestamp(value, fallback) {
+  const text = String(value || "").trim();
+  if (!text) return fallback;
+  return Number.isNaN(new Date(text).getTime()) ? fallback : text;
+}
+
+function normalizeExpenses(input, categories, members) {
+  if (!Array.isArray(input)) return [];
+
+  return input
+    .map(expense => {
+      if (!expense || typeof expense !== "object") return null;
+
+      const date = String(expense.date || "").trim();
+      const amount = roundMoney(expense.amount);
+      let categoryId = String(expense.categoryId || "").trim();
+      let member = String(expense.member || "").trim();
+
+      if (!isValidDate(date) || !Number.isFinite(amount) || amount <= 0) return null;
+      if (!categoryId) categoryId = categories[0]?.id || "";
+      if (!member) member = members[0] || "";
+      if (!categoryId || !member) return null;
+
+      const createdAt = normalizeTimestamp(expense.createdAt, new Date().toISOString());
+      const normalized = {
+        id: String(expense.id || "").trim(),
+        date,
+        member,
+        categoryId,
+        amount,
+        note: String(expense.note || "").trim().slice(0, 80),
+        createdAt
+      };
+      const updatedAt = normalizeTimestamp(expense.updatedAt, "");
+      if (updatedAt) normalized.updatedAt = updatedAt;
+      return normalized;
+    })
+    .filter(Boolean);
+}
+
+function normalizeImportedData(payload) {
+  const source = payload?.data && typeof payload.data === "object" ? payload.data : payload;
+  if (!source || typeof source !== "object") return null;
+
+  const members = normalizeMembers(source.members) || DEFAULT_DATA.members;
+  const categories = normalizeCategories(source.categories, DEFAULT_DATA.categories);
+  if (!categories || categories.length === 0) return null;
+
+  const normalized = {
+    members,
+    categories,
+    monthlyBudgets: normalizeMonthlyBudgets(source.monthlyBudgets, categories),
+    expenses: normalizeExpenses(source.expenses, categories, members)
+  };
+  ensureExpenseIds(normalized.expenses);
+  return normalized;
+}
+
 async function handleApi(req, res, url) {
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
@@ -422,6 +769,47 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/export.json") {
+    send(res, 200, JSON.stringify({
+      exportedAt: new Date().toISOString(),
+      version: 1,
+      data
+    }, null, 2), "application/json; charset=utf-8");
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/import.json") {
+    const payload = await readJson(req);
+    const imported = normalizeImportedData(payload);
+    if (!imported) {
+      sendJson(res, 400, { error: "invalid_import" });
+      return;
+    }
+
+    replaceAllData(imported);
+    sendJson(res, 200, { ok: true, state: buildState(imported, month) });
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/clear") {
+    const payload = await readJson(req);
+    if (payload.confirm !== "CLEAR_ALL") {
+      sendJson(res, 400, { error: "invalid_confirmation" });
+      return;
+    }
+
+    const cleared = {
+      ...DEFAULT_DATA,
+      members: [...DEFAULT_DATA.members],
+      categories: DEFAULT_DATA.categories.map(category => ({ ...category })),
+      monthlyBudgets: {},
+      expenses: []
+    };
+    replaceAllData(cleared);
+    sendJson(res, 200, { ok: true, state: buildState(cleared, month) });
+    return;
+  }
+
   if (req.method === "POST" && url.pathname === "/api/expenses") {
     const payload = await readJson(req);
     const amount = roundMoney(payload.amount);
@@ -456,9 +844,9 @@ async function handleApi(req, res, url) {
       note,
       createdAt: new Date().toISOString()
     };
-    data.expenses.push(expense);
-    saveData(data);
-    sendJson(res, 201, { expense, state: buildState(data, date.slice(0, 7)) });
+    insertExpense(expense);
+    const nextState = buildState(loadData(), date.slice(0, 7));
+    sendJson(res, 201, { expense, state: nextState });
     return;
   }
 
@@ -489,34 +877,32 @@ async function handleApi(req, res, url) {
       sendJson(res, 400, { error: "invalid_category" });
       return;
     }
-    if (!data.members.includes(member)) {
+    if (!data.members.includes(member) && member !== expense.member) {
       sendJson(res, 400, { error: "invalid_member" });
       return;
     }
 
-    Object.assign(expense, {
+    const updatedExpense = {
+      ...expense,
       date,
       member,
       categoryId,
       amount,
       note,
       updatedAt: new Date().toISOString()
-    });
-    saveData(data);
-    sendJson(res, 200, { expense, state: buildState(data, month) });
+    };
+    updateExpense(expense.id, updatedExpense);
+    sendJson(res, 200, { expense: updatedExpense, state: buildState(loadData(), month) });
     return;
   }
 
   if (req.method === "DELETE" && url.pathname.startsWith("/api/expenses/")) {
     const id = decodeURIComponent(url.pathname.replace("/api/expenses/", ""));
-    const before = data.expenses.length;
-    data.expenses = data.expenses.filter(expense => expense.id !== id);
-    if (data.expenses.length === before) {
+    if (!deleteExpenseById(id)) {
       sendJson(res, 404, { error: "expense_not_found" });
       return;
     }
-    saveData(data);
-    sendJson(res, 200, { ok: true, state: buildState(data, month) });
+    sendJson(res, 200, { ok: true, state: buildState(loadData(), month) });
     return;
   }
 
@@ -531,11 +917,9 @@ async function handleApi(req, res, url) {
       return;
     }
 
-    if (members) data.members = members;
-    data.categories = categories;
-    data.monthlyBudgets[safeMonth] = Object.fromEntries(categories.map(category => [category.id, category.limit]));
-    saveData(data);
-    sendJson(res, 200, buildState(data, safeMonth));
+    const nextMembers = members || data.members;
+    saveSettingsData(nextMembers, categories, safeMonth);
+    sendJson(res, 200, buildState(loadData(), safeMonth));
     return;
   }
 
@@ -583,9 +967,11 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+initDatabase();
+
 server.listen(PORT, () => {
-  ensureDataFile();
   console.log(`Money Ledger PWA running at http://localhost:${PORT}`);
+  console.log(`SQLite data file: ${SQLITE_FILE}`);
   if (!TOKEN) {
     console.log("LEDGER_TOKEN is not set. Set it before deploying to a public server.");
   }
