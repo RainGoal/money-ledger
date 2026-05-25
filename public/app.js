@@ -934,12 +934,6 @@ function renderCategories() {
         <small>${category.percent}%</small>
       </div>
     `;
-    card.addEventListener("click", () => {
-      state.selectedCategoryId = category.id;
-      renderEntryControls();
-      setView("entry");
-      elements.amountInput.focus();
-    });
     elements.categoryList.appendChild(card);
   });
 }
@@ -1506,7 +1500,10 @@ async function submitExpense(event) {
     elements.entryFeedback.textContent = category
       ? `${categoryIcon(category)} ${category.name} 剩余 ${money(category.remaining)}，日均 ${money(category.dailyRemaining)}`
       : "已提交";
+    state.selectedExpenseId = null;
     render();
+    showSuccessPopup("记账成功");
+    setView("details");
   } catch (error) {
     elements.entryFeedback.textContent = error.message;
   }
