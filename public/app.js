@@ -11,6 +11,8 @@ const state = {
   token: localStorage.getItem("ledgerToken") || ""
 };
 
+window.__MONEY_LEDGER_SUPPORTED_THEMES__ = ["minimal", "cute", "ios26", "custom"];
+
 const BASE_PATH = normalizeBasePath(window.__LEDGER_BASE_PATH__ || "");
 
 const elements = {

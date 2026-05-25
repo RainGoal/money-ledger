@@ -19,7 +19,7 @@
         document.documentElement.dataset.theme = "minimal";
       }
     </script>
-    <link rel="stylesheet" href="__BASE_PATH__/styles.css">
+    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=28">
   </head>
   <body>
     <div class="app-shell">
@@ -468,6 +468,38 @@
       </div>
     </div>
 
-    <script src="__BASE_PATH__/app.js" defer></script>
+    <script>
+      (function () {
+        document.addEventListener("click", function (event) {
+          var target = event.target;
+          if (!(target instanceof Element)) return;
+
+          var button = target.closest('[data-theme-choice="ios26"]');
+          if (!button) return;
+
+          var supportedThemes = window.__MONEY_LEDGER_SUPPORTED_THEMES__;
+          if (Array.isArray(supportedThemes) && supportedThemes.indexOf("ios26") !== -1) return;
+
+          event.preventDefault();
+          event.stopImmediatePropagation();
+
+          try {
+            localStorage.setItem("ledgerTheme", "ios26");
+          } catch {}
+
+          document.documentElement.dataset.theme = "ios26";
+
+          var themeColor = document.querySelector('meta[name="theme-color"]');
+          if (themeColor) themeColor.setAttribute("content", "#eef4ff");
+
+          document.querySelectorAll("[data-theme-choice]").forEach(function (item) {
+            var isActive = item.getAttribute("data-theme-choice") === "ios26";
+            item.classList.toggle("is-active", isActive);
+            item.setAttribute("aria-pressed", String(isActive));
+          });
+        }, true);
+      })();
+    </script>
+    <script src="__BASE_PATH__/app.js?v=28" defer></script>
   </body>
 </html>

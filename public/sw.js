@@ -1,4 +1,4 @@
-const CACHE_NAME = "money-ledger-v27";
+const CACHE_NAME = "money-ledger-v28";
 const BASE_PATH = "__BASE_PATH__";
 const ASSETS = [
   `${BASE_PATH}/`,
