@@ -191,7 +191,7 @@ function cuteTabIcon(view) {
 }
 
 function normalizeTheme(theme) {
-  if (theme === "cute" || theme === "custom") return theme;
+  if (theme === "cute" || theme === "custom" || theme === "ios26") return theme;
   return "minimal";
 }
 
@@ -225,7 +225,8 @@ function applyTheme(theme) {
   document.documentElement.dataset.theme = state.theme;
   localStorage.setItem("ledgerTheme", state.theme);
   if (elements.themeColorMeta) {
-    elements.themeColorMeta.setAttribute("content", state.theme === "minimal" ? "#ffffff" : "#fff7fb");
+    const themeColor = state.theme === "minimal" ? "#ffffff" : state.theme === "ios26" ? "#eef4ff" : "#fff7fb";
+    elements.themeColorMeta.setAttribute("content", themeColor);
   }
   renderTabIcons();
   renderThemeControls();
