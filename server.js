@@ -66,6 +66,13 @@ function applyBasePath(content) {
   return content.replace(/__BASE_PATH__/g, BASE_PATH);
 }
 
+function staticCacheControl(extension, pathname) {
+  if (pathname === "/sw.js" || [".html", ".css", ".js", ".webmanifest"].includes(extension)) {
+    return "no-store";
+  }
+  return "public, max-age=3600";
+}
+
 function loadJsonDataFile() {
   ensureDataFile();
   const raw = fs.readFileSync(DATA_FILE, "utf8");
@@ -965,7 +972,7 @@ function serveStatic(req, res, url) {
     const body = shouldInjectBasePath ? applyBasePath(content.toString("utf8")) : content;
     res.writeHead(200, {
       "Content-Type": MIME_TYPES[extension] || "application/octet-stream",
-      "Cache-Control": extension === ".html" ? "no-store" : "public, max-age=3600",
+      "Cache-Control": staticCacheControl(extension, pathname),
       "X-Content-Type-Options": "nosniff"
     });
     res.end(body);
