@@ -9,15 +9,16 @@ const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, "public");
 const DATA_DIR = path.join(ROOT, "data");
 const DATA_FILE = path.join(DATA_DIR, "db.json");
+const DEFAULT_CATEGORY_ICONS = ["🍚", "🧴", "🚇", "🎮", "🏠", "💝", "🧾"];
 
 const DEFAULT_DATA = {
   members: ["我", "对象"],
   categories: [
-    { id: "food", name: "餐饮", color: "#2f7d5c", limit: 3000 },
-    { id: "daily", name: "日用品", color: "#b15c2f", limit: 800 },
-    { id: "transport", name: "交通", color: "#3568a6", limit: 600 },
-    { id: "fun", name: "娱乐", color: "#8c5a9e", limit: 1000 },
-    { id: "home", name: "居家", color: "#6f6a35", limit: 1200 }
+    { id: "food", name: "餐饮", icon: "🍚", color: "#2f7d5c", limit: 3000 },
+    { id: "daily", name: "日用品", icon: "🧴", color: "#b15c2f", limit: 800 },
+    { id: "transport", name: "交通", icon: "🚇", color: "#3568a6", limit: 600 },
+    { id: "fun", name: "娱乐", icon: "🎮", color: "#8c5a9e", limit: 1000 },
+    { id: "home", name: "居家", icon: "🏠", color: "#6f6a35", limit: 1200 }
   ],
   monthlyBudgets: {},
   expenses: []
@@ -45,16 +46,43 @@ function ensureDataFile() {
   }
 }
 
+function ensureExpenseIds(expenses) {
+  const seen = new Set();
+  let changed = false;
+
+  expenses.forEach(expense => {
+    if (!expense || typeof expense !== "object") return;
+
+    const currentId = String(expense.id || "").trim();
+    let nextId = currentId;
+    if (!nextId || seen.has(nextId)) {
+      do {
+        nextId = crypto.randomUUID();
+      } while (seen.has(nextId));
+    }
+
+    if (expense.id !== nextId) {
+      expense.id = nextId;
+      changed = true;
+    }
+    seen.add(nextId);
+  });
+
+  return changed;
+}
+
 function loadData() {
   ensureDataFile();
   const raw = fs.readFileSync(DATA_FILE, "utf8");
   const data = JSON.parse(raw);
-  return {
+  const normalized = {
     members: Array.isArray(data.members) ? data.members : DEFAULT_DATA.members,
     categories: Array.isArray(data.categories) ? data.categories : DEFAULT_DATA.categories,
     monthlyBudgets: data.monthlyBudgets && typeof data.monthlyBudgets === "object" ? data.monthlyBudgets : {},
     expenses: Array.isArray(data.expenses) ? data.expenses : []
   };
+  if (ensureExpenseIds(normalized.expenses)) saveData(normalized);
+  return normalized;
 }
 
 function saveData(data) {
@@ -191,6 +219,11 @@ function normalizeColor(color, fallback) {
   return /^#[0-9a-f]{6}$/i.test(String(color || "")) ? color : fallback;
 }
 
+function normalizeIcon(icon, fallback) {
+  const value = String(icon || "").trim();
+  return value ? Array.from(value).slice(0, 2).join("") : fallback;
+}
+
 function categoryBudget(data, month, category) {
   const monthly = data.monthlyBudgets[month] || {};
   if (Object.prototype.hasOwnProperty.call(monthly, category.id)) {
@@ -202,7 +235,11 @@ function categoryBudget(data, month, category) {
 function buildState(data, month = currentMonth()) {
   const safeMonth = isValidMonth(month) ? month : currentMonth();
   const clock = monthClock(safeMonth);
-  const categoryMap = new Map(data.categories.map(category => [category.id, category]));
+  const sourceCategories = data.categories.map((category, index) => ({
+    ...category,
+    icon: normalizeIcon(category.icon, DEFAULT_CATEGORY_ICONS[index % DEFAULT_CATEGORY_ICONS.length])
+  }));
+  const categoryMap = new Map(sourceCategories.map(category => [category.id, category]));
   const expenses = data.expenses
     .filter(expense => String(expense.date || "").startsWith(safeMonth))
     .sort((a, b) => {
@@ -210,7 +247,7 @@ function buildState(data, month = currentMonth()) {
       return String(b.date || "").localeCompare(String(a.date || ""));
     });
 
-  const categories = data.categories.map(category => {
+  const categories = sourceCategories.map(category => {
     const limit = categoryBudget(data, safeMonth, category);
     const spent = roundMoney(
       expenses
@@ -245,6 +282,7 @@ function buildState(data, month = currentMonth()) {
     expenses: expenses.map(expense => ({
       ...expense,
       categoryName: categoryMap.get(expense.categoryId)?.name || "未分类",
+      categoryIcon: categoryMap.get(expense.categoryId)?.icon || "🧾",
       categoryColor: categoryMap.get(expense.categoryId)?.color || "#777777"
     })),
     totals: {
@@ -311,6 +349,7 @@ function normalizeCategories(input, existingCategories) {
       return {
         id,
         name,
+        icon: normalizeIcon(category.icon, previous?.icon || DEFAULT_CATEGORY_ICONS[index % DEFAULT_CATEGORY_ICONS.length]),
         color: normalizeColor(category.color, previous?.color || colors[index % colors.length]),
         limit
       };
@@ -420,6 +459,51 @@ async function handleApi(req, res, url) {
     data.expenses.push(expense);
     saveData(data);
     sendJson(res, 201, { expense, state: buildState(data, date.slice(0, 7)) });
+    return;
+  }
+
+  if (req.method === "PUT" && url.pathname.startsWith("/api/expenses/")) {
+    const id = decodeURIComponent(url.pathname.replace("/api/expenses/", ""));
+    const expense = data.expenses.find(item => item.id === id);
+    if (!expense) {
+      sendJson(res, 404, { error: "expense_not_found" });
+      return;
+    }
+
+    const payload = await readJson(req);
+    const amount = roundMoney(payload.amount);
+    const categoryId = String(payload.categoryId || expense.categoryId || "").trim();
+    const date = String(payload.date || expense.date || currentDate()).trim();
+    const member = String(payload.member || expense.member || data.members[0] || "").trim();
+    const note = String(payload.note || "").trim().slice(0, 80);
+
+    if (!isValidDate(date)) {
+      sendJson(res, 400, { error: "invalid_date" });
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      sendJson(res, 400, { error: "invalid_amount" });
+      return;
+    }
+    if (!data.categories.some(category => category.id === categoryId)) {
+      sendJson(res, 400, { error: "invalid_category" });
+      return;
+    }
+    if (!data.members.includes(member)) {
+      sendJson(res, 400, { error: "invalid_member" });
+      return;
+    }
+
+    Object.assign(expense, {
+      date,
+      member,
+      categoryId,
+      amount,
+      note,
+      updatedAt: new Date().toISOString()
+    });
+    saveData(data);
+    sendJson(res, 200, { expense, state: buildState(data, month) });
     return;
   }
 

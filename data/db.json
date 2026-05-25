@@ -60,8 +60,9 @@
       "member": "胜胜",
       "categoryId": "food",
       "amount": 12.5,
-      "note": "",
-      "createdAt": "2026-05-24T10:29:12.898Z"
+      "note": "午餐",
+      "createdAt": "2026-05-24T10:29:12.898Z",
+      "updatedAt": "2026-05-25T03:33:44.429Z"
     }
   ]
 }

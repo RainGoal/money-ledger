@@ -2,6 +2,8 @@ const state = {
   data: null,
   selectedCategoryId: null,
   selectedMember: null,
+  selectedStatsDate: null,
+  selectedExpenseId: null,
   theme: normalizeTheme(localStorage.getItem("ledgerTheme")),
   token: localStorage.getItem("ledgerToken") || ""
 };
@@ -34,6 +36,17 @@ const elements = {
   noteInput: document.querySelector("#noteInput"),
   entryFeedback: document.querySelector("#entryFeedback"),
   recentList: document.querySelector("#recentList"),
+  detailListPane: document.querySelector("#detailListPane"),
+  recordDetailForm: document.querySelector("#recordDetailForm"),
+  recordBackButton: document.querySelector("#recordBackButton"),
+  recordCreatedAt: document.querySelector("#recordCreatedAt"),
+  recordAmountInput: document.querySelector("#recordAmountInput"),
+  recordCategorySelect: document.querySelector("#recordCategorySelect"),
+  recordMemberSelect: document.querySelector("#recordMemberSelect"),
+  recordDateInput: document.querySelector("#recordDateInput"),
+  recordNoteInput: document.querySelector("#recordNoteInput"),
+  recordDeleteButton: document.querySelector("#recordDeleteButton"),
+  recordFeedback: document.querySelector("#recordFeedback"),
   exportLink: document.querySelector("#exportLink"),
   copySummaryButton: document.querySelector("#copySummaryButton"),
   settingsForm: document.querySelector("#settingsForm"),
@@ -47,8 +60,15 @@ const elements = {
   topCategoryAmount: document.querySelector("#topCategoryAmount"),
   recordCount: document.querySelector("#recordCount"),
   activeDays: document.querySelector("#activeDays"),
+  calendarMonthLabel: document.querySelector("#calendarMonthLabel"),
+  calendarGrid: document.querySelector("#calendarGrid"),
+  selectedDayTitle: document.querySelector("#selectedDayTitle"),
+  selectedDayTotal: document.querySelector("#selectedDayTotal"),
+  selectedDayList: document.querySelector("#selectedDayList"),
   weekdayList: document.querySelector("#weekdayList"),
-  rankList: document.querySelector("#rankList")
+  rankList: document.querySelector("#rankList"),
+  successPopup: document.querySelector("#successPopup"),
+  successPopupMessage: document.querySelector("#successPopupMessage")
 };
 
 const cropper = {
@@ -129,8 +149,10 @@ const CROP_PRESETS = {
   views: { aspectRatio: 9 / 16, outputWidth: 900, outputHeight: 1600 },
   summary: { aspectRatio: 16 / 9, outputWidth: 1280, outputHeight: 720 }
 };
+const CATEGORY_ICON_FALLBACKS = ["🍚", "🧴", "🚇", "🎮", "🏠", "💝", "🧾"];
 
 state.customTheme = loadCustomTheme();
+let successPopupTimer = null;
 
 function cuteTabIcon(view) {
   return `
@@ -620,6 +642,22 @@ function apiHeaders() {
   return headers;
 }
 
+const API_ERROR_MESSAGES = {
+  not_found: "服务接口未找到，请重启应用后再试",
+  expense_not_found: "没有找到这条记录，请返回明细后刷新再试",
+  invalid_date: "日期不正确",
+  invalid_amount: "金额不正确",
+  invalid_category: "分类不存在，请检查分类设置",
+  invalid_member: "记账人员不存在，请检查成员设置",
+  invalid_json: "请求数据格式错误",
+  unauthorized: "未授权"
+};
+
+function apiErrorMessage(payload, response) {
+  const code = payload?.error || "";
+  return API_ERROR_MESSAGES[code] || code || response.statusText || "请求失败";
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     ...options,
@@ -639,10 +677,29 @@ async function api(path, options = {}) {
 
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    throw new Error(payload.error || "请求失败");
+    throw new Error(apiErrorMessage(payload, response));
   }
 
   return response.json();
+}
+
+function hideSuccessPopup() {
+  if (!elements.successPopup) return;
+  elements.successPopup.classList.remove("is-visible");
+  successPopupTimer = window.setTimeout(() => {
+    elements.successPopup.hidden = true;
+  }, 180);
+}
+
+function showSuccessPopup(message) {
+  if (!elements.successPopup) return;
+  window.clearTimeout(successPopupTimer);
+  elements.successPopupMessage.textContent = message;
+  elements.successPopup.hidden = false;
+  window.requestAnimationFrame(() => {
+    elements.successPopup.classList.add("is-visible");
+  });
+  successPopupTimer = window.setTimeout(hideSuccessPopup, 1200);
 }
 
 function setView(view) {
@@ -658,6 +715,10 @@ function meterColor(percent) {
   return "var(--green)";
 }
 
+function categoryIcon(category, index = 0) {
+  return category?.icon || CATEGORY_ICON_FALLBACKS[index % CATEGORY_ICON_FALLBACKS.length];
+}
+
 function formatDetailDate(dateString) {
   const parts = dateString.split("-").map(Number);
   if (parts.length !== 3 || parts.some(Number.isNaN)) return dateString;
@@ -665,6 +726,20 @@ function formatDetailDate(dateString) {
   const weekdays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
   const base = `${parts[1]}月${parts[2]}日 ${weekdays[date.getDay()]}`;
   return dateString === today().date ? `今天 · ${base}` : base;
+}
+
+function formatDateTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value || "-";
+  return date.toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  });
 }
 
 function groupExpensesByDate(expenses) {
@@ -683,6 +758,42 @@ function groupExpensesByDate(expenses) {
   });
 
   return groups;
+}
+
+function monthParts(month) {
+  const [year, monthNumber] = String(month || "").split("-").map(Number);
+  return { year, monthNumber, monthIndex: monthNumber - 1 };
+}
+
+function dateInMonth(month, day) {
+  return `${month}-${String(day).padStart(2, "0")}`;
+}
+
+function compactMoney(value) {
+  const number = Number(value || 0);
+  if (Math.abs(number) >= 10000) return `${(number / 10000).toFixed(1)}万`;
+  return number.toLocaleString("zh-CN", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: number >= 100 ? 0 : 1
+  });
+}
+
+function calendarDayMap(expenses) {
+  const map = new Map();
+  expenses.forEach(expense => {
+    const date = expense.date;
+    if (!map.has(date)) map.set(date, { total: 0, items: [] });
+    const day = map.get(date);
+    day.items.push(expense);
+    day.total = roundMoney(day.total + Number(expense.amount || 0));
+  });
+  return map;
+}
+
+function defaultStatsDate(dayMap) {
+  const current = today();
+  if (state.data.month === current.month) return current.date;
+  return Array.from(dayMap.keys()).sort()[0] || `${state.data.month}-01`;
 }
 
 function weekdayLabel(dateString) {
@@ -705,14 +816,15 @@ function renderSummary() {
 
 function renderCategories() {
   elements.categoryList.innerHTML = "";
-  state.data.categories.forEach(category => {
+  state.data.categories.forEach((category, index) => {
+    const icon = categoryIcon(category, index);
     const card = document.createElement("article");
     card.className = "category-card";
     card.style.setProperty("--accent", category.color);
     card.innerHTML = `
       <div class="category-top">
         <div class="category-name">
-          <span class="swatch" style="background:${category.color}"></span>
+          <span class="category-icon" aria-hidden="true">${escapeHtml(icon)}</span>
           <span>${escapeHtml(category.name)}</span>
         </div>
         <div class="category-amount">${money(category.spent)} / ${money(category.limit)}</div>
@@ -743,11 +855,14 @@ function renderEntryControls() {
   }
 
   elements.categoryChips.innerHTML = "";
-  state.data.categories.forEach(category => {
+  state.data.categories.forEach((category, index) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = `chip${state.selectedCategoryId === category.id ? " is-active" : ""}`;
-    button.textContent = category.name;
+    button.innerHTML = `
+      <span class="category-icon" aria-hidden="true">${escapeHtml(categoryIcon(category, index))}</span>
+      <span>${escapeHtml(category.name)}</span>
+    `;
     button.addEventListener("click", () => {
       state.selectedCategoryId = category.id;
       renderEntryControls();
@@ -798,22 +913,33 @@ function renderRecent() {
 
     group.items.forEach(expense => {
       const item = document.createElement("div");
-      item.className = "day-item";
+      item.className = "day-item day-item-button";
+      item.dataset.expenseId = expense.id;
+      item.tabIndex = 0;
+      item.setAttribute("role", "button");
+      item.setAttribute("aria-label", `查看${expense.categoryName} ${money(expense.amount)}的记录详情`);
       item.style.setProperty("--accent", expense.categoryColor || "#27845b");
       item.innerHTML = `
         <div class="day-item-main">
           <div class="day-item-title">
-            <span class="swatch" style="background:${expense.categoryColor || "#27845b"}"></span>
+            <span class="category-icon" aria-hidden="true">${escapeHtml(expense.categoryIcon || "🧾")}</span>
             <span>${escapeHtml(expense.categoryName)}</span>
           </div>
-          <div class="recent-meta">${escapeHtml(expense.member)}${expense.note ? ` · ${escapeHtml(expense.note)}` : ""}</div>
+          <div class="record-note${expense.note ? "" : " is-empty"}">${expense.note ? escapeHtml(expense.note) : "无备注"}</div>
         </div>
         <div class="day-item-side">
           <div class="recent-amount">-${money(expense.amount)}</div>
-          <button class="delete-button" type="button" aria-label="删除记录">×</button>
+          <span class="record-member-pill">${escapeHtml(expense.member)}</span>
+          <span class="detail-chevron" aria-hidden="true">›</span>
         </div>
       `;
-      item.querySelector("button").addEventListener("click", () => deleteExpense(expense.id));
+      item.addEventListener("click", () => openRecordDetail(expense.id));
+      item.addEventListener("keydown", event => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openRecordDetail(expense.id);
+        }
+      });
       list.appendChild(item);
     });
 
@@ -822,18 +948,154 @@ function renderRecent() {
   });
 }
 
+function openRecordDetail(id) {
+  state.selectedExpenseId = id;
+  renderRecordDetail();
+  elements.recordAmountInput.focus();
+}
+
+function showRecordList() {
+  state.selectedExpenseId = null;
+  elements.detailListPane.hidden = false;
+  elements.recordDetailForm.hidden = true;
+  elements.recordFeedback.textContent = "";
+}
+
+function option(label, value, selectedValue) {
+  const item = document.createElement("option");
+  item.value = value;
+  item.textContent = label;
+  item.selected = value === selectedValue;
+  return item;
+}
+
+function renderRecordDetail() {
+  if (!state.selectedExpenseId) {
+    showRecordList();
+    return;
+  }
+
+  const expense = state.data.expenses.find(item => item.id === state.selectedExpenseId);
+  if (!expense) {
+    showRecordList();
+    return;
+  }
+
+  elements.detailListPane.hidden = true;
+  elements.recordDetailForm.hidden = false;
+  elements.recordCreatedAt.textContent = formatDateTime(expense.createdAt);
+  elements.recordAmountInput.value = expense.amount;
+  elements.recordDateInput.value = expense.date;
+  elements.recordNoteInput.value = expense.note || "";
+  elements.recordFeedback.textContent = "";
+
+  elements.recordCategorySelect.innerHTML = "";
+  state.data.categories.forEach((category, index) => {
+    elements.recordCategorySelect.appendChild(
+      option(`${categoryIcon(category, index)} ${category.name}`, category.id, expense.categoryId)
+    );
+  });
+
+  elements.recordMemberSelect.innerHTML = "";
+  state.data.members.forEach(member => {
+    elements.recordMemberSelect.appendChild(option(member, member, expense.member));
+  });
+}
+
+function collectRecordDetail() {
+  return {
+    amount: Number(String(elements.recordAmountInput.value).replace(",", ".")),
+    categoryId: elements.recordCategorySelect.value,
+    member: elements.recordMemberSelect.value,
+    date: elements.recordDateInput.value,
+    note: elements.recordNoteInput.value
+  };
+}
+
+function renderCalendar(dayMap) {
+  const { year, monthNumber, monthIndex } = monthParts(state.data.month);
+  const days = new Date(year, monthNumber, 0).getDate();
+  const leadingBlanks = (new Date(year, monthIndex, 1).getDay() + 6) % 7;
+  const currentDate = today().date;
+
+  elements.calendarMonthLabel.textContent = `${year}年${monthNumber}月`;
+  elements.calendarGrid.innerHTML = "";
+
+  for (let index = 0; index < leadingBlanks; index += 1) {
+    const blank = document.createElement("span");
+    blank.className = "calendar-blank";
+    elements.calendarGrid.appendChild(blank);
+  }
+
+  for (let day = 1; day <= days; day += 1) {
+    const date = dateInMonth(state.data.month, day);
+    const info = dayMap.get(date);
+    const hasExpense = Boolean(info?.items.length);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `calendar-day${hasExpense ? " has-expense" : ""}${state.selectedStatsDate === date ? " is-selected" : ""}${currentDate === date ? " is-today" : ""}`;
+    button.dataset.calendarDate = date;
+    button.setAttribute("aria-pressed", String(state.selectedStatsDate === date));
+    button.setAttribute("aria-label", `${date} 消费 ${money(info?.total || 0)}`);
+    button.innerHTML = `
+      <span class="calendar-day-number">${day}</span>
+      <strong>${hasExpense ? compactMoney(info.total) : "0"}</strong>
+      <small>${hasExpense ? `${info.items.length} 笔` : "无"}</small>
+    `;
+    elements.calendarGrid.appendChild(button);
+  }
+}
+
+function renderSelectedDayDetails(dayMap) {
+  const info = dayMap.get(state.selectedStatsDate) || { total: 0, items: [] };
+  elements.selectedDayTitle.textContent = formatDetailDate(state.selectedStatsDate);
+  elements.selectedDayTotal.textContent = `合计 ${money(info.total)}`;
+  elements.selectedDayList.innerHTML = "";
+
+  if (info.items.length === 0) {
+    elements.selectedDayList.innerHTML = `<div class="empty-state">当天没有消费记录</div>`;
+    return;
+  }
+
+  info.items.forEach(expense => {
+    const item = document.createElement("div");
+    item.className = "calendar-expense";
+    item.style.setProperty("--accent", expense.categoryColor || "#27845b");
+    item.innerHTML = `
+      <div class="day-item-main">
+        <div class="day-item-title">
+          <span class="category-icon" aria-hidden="true">${escapeHtml(expense.categoryIcon || "🧾")}</span>
+          <span>${escapeHtml(expense.categoryName)}</span>
+        </div>
+        <div class="recent-meta">${escapeHtml(expense.member)}${expense.note ? ` · ${escapeHtml(expense.note)}` : ""}</div>
+      </div>
+      <strong class="calendar-expense-amount">-${money(expense.amount)}</strong>
+    `;
+    elements.selectedDayList.appendChild(item);
+  });
+}
+
 function renderStats() {
   const expenses = state.data.expenses;
+  const dayMap = calendarDayMap(expenses);
   const activeDates = new Set(expenses.map(expense => expense.date));
   const activeDayCount = activeDates.size;
   const averageDailySpend = state.data.totals.elapsedDays > 0 ? state.data.totals.spent / state.data.totals.elapsedDays : 0;
   const topCategory = state.data.categories.slice().sort((a, b) => b.spent - a.spent)[0];
 
+  if (!state.selectedStatsDate || !state.selectedStatsDate.startsWith(`${state.data.month}-`)) {
+    state.selectedStatsDate = defaultStatsDate(dayMap);
+  }
+
   elements.avgDailySpend.textContent = money(averageDailySpend);
-  elements.topCategoryName.textContent = topCategory && topCategory.spent > 0 ? topCategory.name : "-";
+  elements.topCategoryName.textContent = topCategory && topCategory.spent > 0
+    ? `${categoryIcon(topCategory)} ${topCategory.name}`
+    : "-";
   elements.topCategoryAmount.textContent = topCategory ? money(topCategory.spent) : "0.00";
   elements.recordCount.textContent = String(expenses.length);
   elements.activeDays.textContent = String(activeDayCount);
+  renderCalendar(dayMap);
+  renderSelectedDayDetails(dayMap);
 
   const weekdayTotals = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"].map(label => ({ label, amount: 0 }));
   const weekdayIndex = new Map(weekdayTotals.map((item, index) => [item.label, index]));
@@ -849,7 +1111,7 @@ function renderStats() {
   const ranks = state.data.categories
     .slice()
     .sort((a, b) => b.spent - a.spent)
-    .map(category => ({ label: category.name, amount: category.spent, color: category.color }));
+    .map(category => ({ label: category.name, amount: category.spent, color: category.color, icon: categoryIcon(category) }));
   renderRankList(ranks);
 }
 
@@ -878,9 +1140,10 @@ function renderRankList(items) {
   items.forEach((item, index) => {
     const row = document.createElement("div");
     row.className = "rank-row";
+    row.style.setProperty("--accent", item.color || "#27845b");
     row.innerHTML = `
       <span class="rank-index">${index + 1}</span>
-      <span class="swatch" style="background:${item.color || "#27845b"}"></span>
+      <span class="category-icon" aria-hidden="true">${escapeHtml(item.icon || "🧾")}</span>
       <span class="rank-name">${escapeHtml(item.label)}</span>
       <strong>${money(item.amount)}</strong>
     `;
@@ -893,7 +1156,7 @@ function renderSettings() {
   elements.memberTwoInput.value = state.data.members[1] || "";
   elements.budgetRows.innerHTML = "";
 
-  state.data.categories.forEach(category => {
+  state.data.categories.forEach((category, index) => {
     const row = document.createElement("div");
     row.className = "budget-row";
     row.dataset.id = category.id;
@@ -911,6 +1174,10 @@ function renderSettings() {
         <span>颜色</span>
         <input class="budget-color" type="color" value="${category.color}">
       </label>
+      <label>
+        <span>图标</span>
+        <input class="budget-icon" value="${escapeAttribute(categoryIcon(category, index))}" maxlength="4" aria-label="${escapeAttribute(category.name)}图标">
+      </label>
     `;
     elements.budgetRows.appendChild(row);
   });
@@ -921,6 +1188,7 @@ function render() {
   renderCategories();
   renderEntryControls();
   renderRecent();
+  renderRecordDetail();
   renderStats();
   renderSettings();
 }
@@ -956,7 +1224,7 @@ async function submitExpense(event) {
     elements.noteInput.value = "";
     const category = state.data.categories.find(item => item.id === state.selectedCategoryId);
     elements.entryFeedback.textContent = category
-      ? `${category.name} 剩余 ${money(category.remaining)}，日均 ${money(category.dailyRemaining)}`
+      ? `${categoryIcon(category)} ${category.name} 剩余 ${money(category.remaining)}，日均 ${money(category.dailyRemaining)}`
       : "已提交";
     render();
   } catch (error) {
@@ -970,13 +1238,42 @@ async function deleteExpense(id) {
     method: "DELETE"
   });
   state.data = result.state;
+  state.selectedExpenseId = null;
   render();
+  showRecordList();
+}
+
+async function saveRecordDetail(event) {
+  event.preventDefault();
+  if (!state.selectedExpenseId) return;
+  elements.recordFeedback.textContent = "保存中...";
+
+  try {
+    const result = await api(`/api/expenses/${encodeURIComponent(state.selectedExpenseId)}?month=${encodeURIComponent(state.data.month)}`, {
+      method: "PUT",
+      body: JSON.stringify(collectRecordDetail())
+    });
+    state.data = result.state;
+    state.selectedExpenseId = null;
+    render();
+    showSuccessPopup("保存成功");
+  } catch (error) {
+    elements.recordFeedback.textContent = error.message;
+  }
+}
+
+function deleteSelectedExpense() {
+  if (!state.selectedExpenseId) return;
+  deleteExpense(state.selectedExpenseId).catch(error => {
+    elements.recordFeedback.textContent = error.message;
+  });
 }
 
 function collectBudgetRows() {
   return Array.from(elements.budgetRows.querySelectorAll(".budget-row")).map(row => ({
     id: row.dataset.id,
     name: row.querySelector(".budget-name").value.trim(),
+    icon: row.querySelector(".budget-icon").value.trim(),
     limit: Number(String(row.querySelector(".budget-limit").value).replace(",", ".")),
     color: row.querySelector(".budget-color").value
   }));
@@ -1006,6 +1303,7 @@ async function saveSettings(event) {
 
 function addCategoryRow() {
   const id = `cat-${cryptoId()}`;
+  const icon = CATEGORY_ICON_FALLBACKS[elements.budgetRows.children.length % CATEGORY_ICON_FALLBACKS.length];
   const row = document.createElement("div");
   row.className = "budget-row";
   row.dataset.id = id;
@@ -1023,9 +1321,22 @@ function addCategoryRow() {
       <span>颜色</span>
       <input class="budget-color" type="color" value="#477061">
     </label>
+    <label>
+      <span>图标</span>
+      <input class="budget-icon" value="${escapeAttribute(icon)}" maxlength="4" aria-label="新分类图标">
+    </label>
   `;
   elements.budgetRows.appendChild(row);
   row.querySelector(".budget-name").focus();
+}
+
+function handleCalendarClick(event) {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const button = target.closest("[data-calendar-date]");
+  if (!button) return;
+  state.selectedStatsDate = button.dataset.calendarDate;
+  renderStats();
 }
 
 async function copySummary() {
@@ -1081,8 +1392,12 @@ function bindEvents() {
   document.addEventListener("keydown", handleCropKeyDown);
   elements.monthInput.addEventListener("change", loadState);
   elements.expenseForm.addEventListener("submit", submitExpense);
+  elements.recordDetailForm.addEventListener("submit", saveRecordDetail);
+  elements.recordBackButton.addEventListener("click", showRecordList);
+  elements.recordDeleteButton.addEventListener("click", deleteSelectedExpense);
   elements.settingsForm.addEventListener("submit", saveSettings);
   elements.addCategoryButton.addEventListener("click", addCategoryRow);
+  elements.calendarGrid.addEventListener("click", handleCalendarClick);
   elements.copySummaryButton.addEventListener("click", copySummary);
 }
 

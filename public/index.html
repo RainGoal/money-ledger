@@ -108,12 +108,62 @@
         </section>
 
         <section id="detailsView" class="view" aria-label="记账明细">
-          <div class="section-heading">
-            <h2>记账明细</h2>
-            <a id="exportLink" class="ghost-link" href="/api/export.csv" download="expenses.csv">导出 CSV</a>
+          <div id="detailListPane">
+            <div class="section-heading">
+              <h2>记账明细</h2>
+              <a id="exportLink" class="ghost-link" href="/api/export.csv" download="expenses.csv">导出 CSV</a>
+            </div>
+            <p class="details-intro">按日期倒序展示，每一天的合计会放在组标题右侧。</p>
+            <div id="recentList" class="detail-list"></div>
           </div>
-          <p class="details-intro">按日期倒序展示，每一天的合计会放在组标题右侧。</p>
-          <div id="recentList" class="detail-list"></div>
+
+          <form id="recordDetailForm" class="record-detail-panel" hidden>
+            <div class="record-detail-head">
+              <button id="recordBackButton" class="ghost-button" type="button">返回</button>
+              <div>
+                <p class="eyebrow">Record Detail</p>
+                <h2>记录详情</h2>
+              </div>
+            </div>
+
+            <div class="record-meta">
+              <span>记账时间</span>
+              <strong id="recordCreatedAt">-</strong>
+            </div>
+
+            <label class="record-amount-field">
+              <span>金额</span>
+              <input id="recordAmountInput" inputmode="decimal" autocomplete="off" required>
+            </label>
+
+            <div class="two-column">
+              <label>
+                <span>分类</span>
+                <select id="recordCategorySelect" required></select>
+              </label>
+              <label>
+                <span>记账人员</span>
+                <select id="recordMemberSelect" required></select>
+              </label>
+            </div>
+
+            <div class="two-column">
+              <label>
+                <span>日期</span>
+                <input id="recordDateInput" type="date" required>
+              </label>
+              <label>
+                <span>备注</span>
+                <input id="recordNoteInput" maxlength="80" placeholder="可选">
+              </label>
+            </div>
+
+            <div class="record-actions">
+              <button class="primary-button" type="submit">保存修改</button>
+              <button id="recordDeleteButton" class="danger-button" type="button">删除记录</button>
+            </div>
+            <p id="recordFeedback" class="feedback" role="status"></p>
+          </form>
         </section>
 
         <section id="statsView" class="view" aria-label="统计">
@@ -143,6 +193,27 @@
             </div>
 
             <div class="section-heading">
+              <h2>消费日历</h2>
+              <span id="calendarMonthLabel" class="panel-hint"></span>
+            </div>
+            <div class="calendar-weekdays" aria-hidden="true">
+              <span>一</span>
+              <span>二</span>
+              <span>三</span>
+              <span>四</span>
+              <span>五</span>
+              <span>六</span>
+              <span>日</span>
+            </div>
+            <div id="calendarGrid" class="calendar-grid"></div>
+
+            <div class="section-heading calendar-detail-heading">
+              <h2 id="selectedDayTitle">当天明细</h2>
+              <span id="selectedDayTotal" class="panel-hint">0.00</span>
+            </div>
+            <div id="selectedDayList" class="calendar-day-list"></div>
+
+            <div class="section-heading">
               <h2>星期分布</h2>
             </div>
             <div id="weekdayList" class="bar-list"></div>
@@ -156,49 +227,76 @@
 
         <section id="settingsView" class="view" aria-label="预算设置">
           <form id="settingsForm" class="settings-panel">
-            <div class="section-heading">
-              <h2>主题</h2>
-              <span class="panel-hint">本机保存</span>
-            </div>
-            <div class="theme-switch" role="group" aria-label="主题切换">
-              <button class="theme-option is-active" type="button" data-theme-choice="minimal" aria-pressed="true">
-                <span class="theme-preview theme-preview--minimal" aria-hidden="true"></span>
-                <span>简约</span>
-              </button>
-              <button class="theme-option" type="button" data-theme-choice="cute" aria-pressed="false">
-                <span class="theme-preview theme-preview--cute" aria-hidden="true"></span>
-                <span>可爱 Kitty</span>
-              </button>
-              <button class="theme-option" type="button" data-theme-choice="custom" aria-pressed="false">
-                <span class="theme-preview theme-preview--custom" aria-hidden="true"></span>
-                <span>自定义</span>
-              </button>
-            </div>
+            <details class="settings-group" open>
+              <summary>
+                <span class="settings-group-icon" aria-hidden="true">🎀</span>
+                <span>
+                  <strong>主题与自定义</strong>
+                  <small>主题切换、Tab 图标、页面背景</small>
+                </span>
+              </summary>
+              <div class="settings-group-body">
+                <div class="theme-switch" role="group" aria-label="主题切换">
+                  <button class="theme-option is-active" type="button" data-theme-choice="minimal" aria-pressed="true">
+                    <span class="theme-preview theme-preview--minimal" aria-hidden="true"></span>
+                    <span>简约</span>
+                  </button>
+                  <button class="theme-option" type="button" data-theme-choice="cute" aria-pressed="false">
+                    <span class="theme-preview theme-preview--cute" aria-hidden="true"></span>
+                    <span>可爱 Kitty</span>
+                  </button>
+                  <button class="theme-option" type="button" data-theme-choice="custom" aria-pressed="false">
+                    <span class="theme-preview theme-preview--custom" aria-hidden="true"></span>
+                    <span>自定义</span>
+                  </button>
+                </div>
 
-            <div class="section-heading custom-heading">
-              <h2>自定义素材</h2>
-            </div>
-            <div id="customThemeGrid" class="custom-theme-grid"></div>
+                <div class="section-heading custom-heading">
+                  <h2>自定义素材</h2>
+                  <span class="panel-hint">本机保存</span>
+                </div>
+                <div id="customThemeGrid" class="custom-theme-grid"></div>
+              </div>
+            </details>
 
-            <div class="section-heading">
-              <h2>成员</h2>
-            </div>
-            <div class="two-column">
-              <label>
-                <span>成员 1</span>
-                <input id="memberOneInput" maxlength="12" required>
-              </label>
-              <label>
-                <span>成员 2</span>
-                <input id="memberTwoInput" maxlength="12" required>
-              </label>
-            </div>
+            <details class="settings-group">
+              <summary>
+                <span class="settings-group-icon" aria-hidden="true">👥</span>
+                <span>
+                  <strong>成员</strong>
+                  <small>记账成员名称</small>
+                </span>
+              </summary>
+              <div class="settings-group-body">
+                <div class="two-column">
+                  <label>
+                    <span>成员 1</span>
+                    <input id="memberOneInput" maxlength="12" required>
+                  </label>
+                  <label>
+                    <span>成员 2</span>
+                    <input id="memberTwoInput" maxlength="12" required>
+                  </label>
+                </div>
+              </div>
+            </details>
 
-            <div class="section-heading">
-              <h2>分类额度</h2>
-              <button id="addCategoryButton" class="ghost-button" type="button">新增分类</button>
-            </div>
-            <div id="budgetRows" class="budget-rows"></div>
+            <details class="settings-group" open>
+              <summary>
+                <span class="settings-group-icon" aria-hidden="true">🏷</span>
+                <span>
+                  <strong>分类设置</strong>
+                  <small>名称、图标、额度和颜色</small>
+                </span>
+              </summary>
+              <div class="settings-group-body">
+                <div class="section-heading settings-inner-heading">
+                  <h2>分类额度</h2>
+                  <button id="addCategoryButton" class="ghost-button" type="button">新增分类</button>
+                </div>
+                <div id="budgetRows" class="budget-rows"></div>
+              </div>
+            </details>
 
             <button class="primary-button" type="submit">保存设置</button>
             <p id="settingsFeedback" class="feedback" role="status"></p>
@@ -260,6 +358,13 @@
           <button id="cropCancelButton" class="ghost-button" type="button">取消</button>
           <button id="cropApplyButton" class="primary-button" type="button">应用</button>
         </div>
+      </div>
+    </div>
+
+    <div id="successPopup" class="success-popup" hidden>
+      <div class="success-popup-card" role="status" aria-live="polite">
+        <span class="success-mark" aria-hidden="true">✓</span>
+        <strong id="successPopupMessage">保存成功</strong>
       </div>
     </div>
 
