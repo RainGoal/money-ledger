@@ -73,18 +73,26 @@ html[data-theme="custom"] {
 }
 
 html {
+  height: 100%;
   min-height: 100%;
+  overflow: hidden;
   background: var(--bg);
+  overscroll-behavior: none;
 }
 
 body {
-  position: relative;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   min-height: 100%;
+  overflow: hidden;
   margin: 0;
   color: var(--text);
   background: var(--bg);
   font-family: "Avenir Next", "SF Pro Text", "Helvetica Neue", "Segoe UI", sans-serif;
   letter-spacing: 0;
+  overscroll-behavior: none;
 }
 
 body::before {
@@ -126,10 +134,19 @@ select {
   position: relative;
   z-index: 1;
   width: min(520px, 100%);
+  min-width: 0;
+  height: 100vh;
+  height: 100dvh;
   min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
   margin: 0 auto;
   padding: 38px 24px 128px;
   isolation: isolate;
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .topbar {
@@ -218,10 +235,14 @@ a:focus-visible,
 main {
   display: grid;
   gap: 18px;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .view {
   display: none;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 .view.is-active {
@@ -930,6 +951,10 @@ html[data-theme="cute"] .category-meter {
 }
 
 body.is-cropping {
+  overflow: hidden;
+}
+
+body.is-cropping .app-shell {
   overflow: hidden;
 }
 
@@ -2082,7 +2107,7 @@ html[data-theme="custom"] .calendar-day.has-expense {
 .tabbar {
   position: fixed;
   left: 50%;
-  bottom: max(10px, env(safe-area-inset-bottom));
+  bottom: 0;
   z-index: 30;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
