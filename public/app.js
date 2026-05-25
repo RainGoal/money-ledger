@@ -11,6 +11,7 @@ const elements = {
   monthInput: document.querySelector("#monthInput"),
   tabs: document.querySelectorAll(".tab"),
   themeOptions: document.querySelectorAll("[data-theme-choice]"),
+  customThemeGrid: document.querySelector("#customThemeGrid"),
   views: {
     dashboard: document.querySelector("#dashboardView"),
     entry: document.querySelector("#entryView"),
@@ -50,6 +51,41 @@ const elements = {
   rankList: document.querySelector("#rankList")
 };
 
+const cropper = {
+  file: null,
+  group: "",
+  key: "",
+  image: null,
+  source: "",
+  aspectRatio: 1,
+  outputWidth: 320,
+  outputHeight: 320,
+  baseScale: 1,
+  scale: 1,
+  offsetX: 0,
+  offsetY: 0,
+  frame: { x: 0, y: 0, width: 0, height: 0 },
+  dragging: false,
+  pointerId: null,
+  dragStartX: 0,
+  dragStartY: 0,
+  startOffsetX: 0,
+  startOffsetY: 0,
+  resolve: null
+};
+
+const cropElements = {
+  modal: document.querySelector("#cropModal"),
+  title: document.querySelector("#cropTitle"),
+  stage: document.querySelector("#cropStage"),
+  image: document.querySelector("#cropImage"),
+  frame: document.querySelector("#cropFrame"),
+  scaleInput: document.querySelector("#cropScaleInput"),
+  applyButton: document.querySelector("#cropApplyButton"),
+  cancelButton: document.querySelector("#cropCancelButton"),
+  cancelTopButton: document.querySelector("#cropCancelTopButton")
+};
+
 const MINIMAL_TAB_ICONS = {
   dashboard: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 10.5 12 4l7.5 6.5V20a1 1 0 0 1-1 1h-4.25v-5.5h-4.5V21H5.5a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg>`,
   details: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 7h11M6.5 12h11M6.5 17h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
@@ -66,26 +102,50 @@ const CUTE_TAB_SYMBOLS = {
   settings: `<path class="kitty-symbol" d="M12 15.1a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4Zm4.2 1.7h-1M9.8 16.8h-1M12 13.6v-1M12 21v-1"/>`
 };
 
+const HELLO_KITTY_ICON = "/hello-kitty-red.jpg";
+
+const CUSTOM_THEME_STORAGE_KEY = "ledgerCustomTheme";
+const CUSTOM_TAB_SLOTS = [
+  { key: "dashboard", label: "首页图标" },
+  { key: "details", label: "明细图标" },
+  { key: "entry", label: "记账图标" },
+  { key: "stats", label: "统计图标" },
+  { key: "settings", label: "设置图标" }
+];
+const CUSTOM_VIEW_SLOTS = [
+  { key: "dashboard", label: "首页背景" },
+  { key: "details", label: "明细背景" },
+  { key: "stats", label: "统计背景" },
+  { key: "settings", label: "设置背景" }
+];
+const CUSTOM_THEME_SLOTS = [
+  ...CUSTOM_TAB_SLOTS.map(slot => ({ ...slot, group: "tabs", hint: "Tabbar" })),
+  ...CUSTOM_VIEW_SLOTS.map(slot => ({ ...slot, group: "views", hint: "页面" })),
+  { key: "summary", label: "总预算背景", group: "summary", hint: "首页卡片" }
+];
+
+const CROP_PRESETS = {
+  tabs: { aspectRatio: 1, outputWidth: 320, outputHeight: 320 },
+  views: { aspectRatio: 9 / 16, outputWidth: 900, outputHeight: 1600 },
+  summary: { aspectRatio: 16 / 9, outputWidth: 1280, outputHeight: 720 }
+};
+
+state.customTheme = loadCustomTheme();
+
 function cuteTabIcon(view) {
   return `
-    <svg class="kitty-tab-svg" viewBox="0 0 24 24" aria-hidden="true">
-      <path class="kitty-ear" d="M6.7 9.5 8.4 4.8l3.4 3.5"/>
-      <path class="kitty-ear" d="M17.3 9.5 15.6 4.8l-3.4 3.5"/>
-      <ellipse class="kitty-face" cx="12" cy="13.2" rx="7.5" ry="5.9"/>
-      <path class="kitty-whisker" d="M5.2 12.9H2.9M5.4 14.9l-2.1.8M18.8 12.9h2.3M18.6 14.9l2.1.8"/>
-      <circle class="kitty-eye" cx="9.5" cy="12.8" r="0.58"/>
-      <circle class="kitty-eye" cx="14.5" cy="12.8" r="0.58"/>
-      <ellipse class="kitty-nose" cx="12" cy="14.2" rx="0.72" ry="0.5"/>
-      <path class="kitty-bow" d="M15.9 6.2c1.4-1.3 3.4-.6 3.5 1.2.1 1.6-1.8 2.3-3.4 1.2.5-.7.5-1.6-.1-2.4Z"/>
-      <path class="kitty-bow" d="M14.1 6.9c-.8-1.5-2.8-1.4-3.4.2-.5 1.5 1 2.6 2.8 1.9-.2-.7 0-1.5.6-2.1Z"/>
-      <circle class="kitty-bow-knot" cx="14.8" cy="7.9" r="1.1"/>
-      ${CUTE_TAB_SYMBOLS[view] || ""}
-    </svg>
+    <span class="kitty-icon-shell kitty-icon-shell--${view}">
+      <img class="kitty-icon-image" src="${HELLO_KITTY_ICON}" alt="" aria-hidden="true">
+      <svg class="kitty-icon-badge" viewBox="0 0 24 24" aria-hidden="true">
+        ${CUTE_TAB_SYMBOLS[view] || ""}
+      </svg>
+    </span>
   `;
 }
 
 function normalizeTheme(theme) {
-  return theme === "cute" ? "cute" : "minimal";
+  if (theme === "cute" || theme === "custom") return theme;
+  return "minimal";
 }
 
 function renderTabIcons() {
@@ -93,7 +153,15 @@ function renderTabIcons() {
     const icon = tab.querySelector(".tab-icon");
     if (!icon) return;
     const view = tab.dataset.view;
-    icon.innerHTML = state.theme === "cute" ? cuteTabIcon(view) : MINIMAL_TAB_ICONS[view] || "";
+    if (state.theme === "cute") {
+      icon.innerHTML = cuteTabIcon(view);
+      return;
+    }
+    if (state.theme === "custom") {
+      icon.innerHTML = customTabIcon(view) || MINIMAL_TAB_ICONS[view] || "";
+      return;
+    }
+    icon.innerHTML = MINIMAL_TAB_ICONS[view] || "";
   });
 }
 
@@ -110,10 +178,422 @@ function applyTheme(theme) {
   document.documentElement.dataset.theme = state.theme;
   localStorage.setItem("ledgerTheme", state.theme);
   if (elements.themeColorMeta) {
-    elements.themeColorMeta.setAttribute("content", state.theme === "cute" ? "#fff7fb" : "#ffffff");
+    elements.themeColorMeta.setAttribute("content", state.theme === "minimal" ? "#ffffff" : "#fff7fb");
   }
   renderTabIcons();
   renderThemeControls();
+  renderCustomThemeControls();
+  applyCustomThemeAssets();
+}
+
+function loadCustomTheme() {
+  try {
+    const value = JSON.parse(localStorage.getItem(CUSTOM_THEME_STORAGE_KEY) || "{}");
+    return {
+      tabs: value.tabs && typeof value.tabs === "object" ? value.tabs : {},
+      views: value.views && typeof value.views === "object" ? value.views : {},
+      summary: typeof value.summary === "string" ? value.summary : ""
+    };
+  } catch {
+    return { tabs: {}, views: {}, summary: "" };
+  }
+}
+
+function saveCustomTheme() {
+  localStorage.setItem(CUSTOM_THEME_STORAGE_KEY, JSON.stringify(state.customTheme));
+}
+
+function customTabIcon(view) {
+  const source = state.customTheme.tabs?.[view];
+  if (!source) return "";
+  return `<span class="custom-tab-image"><img src="${source}" alt="" aria-hidden="true"></span>`;
+}
+
+function customAssetFor(slot) {
+  if (slot.group === "summary") return state.customTheme.summary || "";
+  return state.customTheme[slot.group]?.[slot.key] || "";
+}
+
+function renderCustomThemeControls() {
+  if (!elements.customThemeGrid) return;
+  elements.customThemeGrid.innerHTML = "";
+
+  CUSTOM_THEME_SLOTS.forEach(slot => {
+    const source = customAssetFor(slot);
+    const item = document.createElement("article");
+    item.className = "custom-theme-item";
+    item.innerHTML = `
+      <div class="custom-theme-thumb${source ? " has-image" : ""}" ${source ? `style="background-image:url('${source}')"` : ""}></div>
+      <div class="custom-theme-meta">
+        <strong>${escapeHtml(slot.label)}</strong>
+        <span>${escapeHtml(slot.hint)}</span>
+      </div>
+      <div class="custom-theme-actions">
+        <label class="custom-upload">
+          <span>上传</span>
+          <input type="file" accept="image/*" data-custom-group="${slot.group}" data-custom-key="${slot.key}">
+        </label>
+        <button class="custom-clear" type="button" data-custom-clear-group="${slot.group}" data-custom-clear-key="${slot.key}" aria-label="清除${escapeAttribute(slot.label)}">×</button>
+      </div>
+    `;
+    elements.customThemeGrid.appendChild(item);
+  });
+}
+
+function applyCustomThemeAssets() {
+  Object.entries(elements.views).forEach(([view, element]) => {
+    const source = state.theme === "custom" ? state.customTheme.views?.[view] : "";
+    element.classList.toggle("has-custom-bg", Boolean(source));
+    if (source) {
+      element.style.setProperty("--view-bg-image", `url("${source}")`);
+    } else {
+      element.style.removeProperty("--view-bg-image");
+    }
+  });
+
+  const summaryPanel = document.querySelector(".summary-panel");
+  const summarySource = state.theme === "custom" ? state.customTheme.summary : "";
+  if (!summaryPanel) return;
+  summaryPanel.classList.toggle("has-custom-summary-bg", Boolean(summarySource));
+  if (summarySource) {
+    summaryPanel.style.setProperty("--summary-bg-image", `url("${summarySource}")`);
+  } else {
+    summaryPanel.style.removeProperty("--summary-bg-image");
+  }
+}
+
+async function handleCustomAssetUpload(event) {
+  const input = event.target;
+  if (!(input instanceof HTMLInputElement) || input.type !== "file") return;
+  const file = input.files?.[0];
+  if (!file) return;
+
+  const group = input.dataset.customGroup;
+  const key = input.dataset.customKey;
+
+  try {
+    await openCropper(file, group, key);
+  } catch (error) {
+    elements.settingsFeedback.textContent = error.message || "图片读取失败";
+  } finally {
+    input.value = "";
+  }
+}
+
+function handleCustomAssetClear(event) {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const button = target.closest("[data-custom-clear-group]");
+  if (!button) return;
+  const group = button.dataset.customClearGroup;
+  const key = button.dataset.customClearKey;
+
+  if (group === "summary") {
+    state.customTheme.summary = "";
+  } else if (state.customTheme[group]) {
+    delete state.customTheme[group][key];
+  }
+
+  saveCustomTheme();
+  renderCustomThemeControls();
+  renderTabIcons();
+  applyCustomThemeAssets();
+  elements.settingsFeedback.textContent = "已清除自定义素材";
+}
+
+async function openCropper(file, group, key) {
+  const preset = CROP_PRESETS[group];
+  if (!preset || (group !== "summary" && !key)) {
+    throw new Error("未知素材位置");
+  }
+  if (file.type && !file.type.startsWith("image/")) {
+    throw new Error("请选择图片文件");
+  }
+  if (!cropElements.modal || !cropElements.stage || !cropElements.image || !cropElements.frame) {
+    throw new Error("裁剪器初始化失败");
+  }
+
+  const source = await readFileAsDataUrl(file);
+  const image = await loadCropImage(source);
+  const slot = CUSTOM_THEME_SLOTS.find(item => item.group === group && item.key === key);
+
+  Object.assign(cropper, {
+    file,
+    group,
+    key,
+    image,
+    source,
+    aspectRatio: preset.aspectRatio,
+    outputWidth: preset.outputWidth,
+    outputHeight: preset.outputHeight,
+    baseScale: 1,
+    scale: 1,
+    offsetX: 0,
+    offsetY: 0,
+    dragging: false,
+    pointerId: null
+  });
+
+  const completion = new Promise(resolve => {
+    cropper.resolve = resolve;
+  });
+
+  cropElements.title.textContent = slot ? `裁剪${slot.label}` : "裁剪图片";
+  cropElements.image.src = source;
+  cropElements.scaleInput.value = "1";
+  cropElements.modal.hidden = false;
+  document.body.classList.add("is-cropping");
+
+  await new Promise(resolve => requestAnimationFrame(resolve));
+  configureCropFrame();
+  fitCropImage();
+  renderCropper();
+  cropElements.applyButton.focus();
+
+  return completion;
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("图片读取失败"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadCropImage(source) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("图片读取失败"));
+    image.src = source;
+  });
+}
+
+function configureCropFrame() {
+  const rect = cropElements.stage.getBoundingClientRect();
+  const gap = rect.width < 360 ? 24 : 36;
+  let width = Math.max(96, rect.width - gap);
+  let height = width / cropper.aspectRatio;
+  const maxHeight = Math.max(160, rect.height - gap);
+
+  if (height > maxHeight) {
+    height = maxHeight;
+    width = height * cropper.aspectRatio;
+  }
+
+  cropper.frame = {
+    x: (rect.width - width) / 2,
+    y: (rect.height - height) / 2,
+    width,
+    height
+  };
+
+  cropElements.frame.style.left = `${cropper.frame.x}px`;
+  cropElements.frame.style.top = `${cropper.frame.y}px`;
+  cropElements.frame.style.width = `${cropper.frame.width}px`;
+  cropElements.frame.style.height = `${cropper.frame.height}px`;
+}
+
+function fitCropImage() {
+  const image = cropper.image;
+  if (!image) return;
+  cropper.baseScale = Math.max(
+    cropper.frame.width / image.naturalWidth,
+    cropper.frame.height / image.naturalHeight
+  );
+  cropper.scale = Number(cropElements.scaleInput.value) || 1;
+  cropper.offsetX = 0;
+  cropper.offsetY = 0;
+  clampCropOffset();
+}
+
+function getCropImageLayout() {
+  const image = cropper.image;
+  const scale = cropper.baseScale * cropper.scale;
+  const width = image.naturalWidth * scale;
+  const height = image.naturalHeight * scale;
+  const centerX = cropper.frame.x + cropper.frame.width / 2 + cropper.offsetX;
+  const centerY = cropper.frame.y + cropper.frame.height / 2 + cropper.offsetY;
+
+  return {
+    scale,
+    width,
+    height,
+    left: centerX - width / 2,
+    top: centerY - height / 2
+  };
+}
+
+function clampCropOffset() {
+  if (!cropper.image) return;
+  const frame = cropper.frame;
+  let layout = getCropImageLayout();
+
+  if (layout.width <= frame.width + 0.5) {
+    cropper.offsetX = 0;
+  } else {
+    if (layout.left > frame.x) {
+      cropper.offsetX -= layout.left - frame.x;
+      layout = getCropImageLayout();
+    }
+    const rightGap = frame.x + frame.width - (layout.left + layout.width);
+    if (rightGap > 0) {
+      cropper.offsetX += rightGap;
+      layout = getCropImageLayout();
+    }
+  }
+
+  if (layout.height <= frame.height + 0.5) {
+    cropper.offsetY = 0;
+  } else {
+    if (layout.top > frame.y) {
+      cropper.offsetY -= layout.top - frame.y;
+      layout = getCropImageLayout();
+    }
+    const bottomGap = frame.y + frame.height - (layout.top + layout.height);
+    if (bottomGap > 0) {
+      cropper.offsetY += bottomGap;
+    }
+  }
+}
+
+function renderCropper() {
+  if (!cropper.image) return;
+  const layout = getCropImageLayout();
+  cropElements.image.style.width = `${layout.width}px`;
+  cropElements.image.style.height = `${layout.height}px`;
+  cropElements.image.style.transform = `translate(${layout.left}px, ${layout.top}px)`;
+}
+
+function handleCropPointerDown(event) {
+  if (cropElements.modal.hidden || !cropper.image) return;
+  if (event.button !== undefined && event.button > 0) return;
+  event.preventDefault();
+  cropper.dragging = true;
+  cropper.pointerId = event.pointerId;
+  cropper.dragStartX = event.clientX;
+  cropper.dragStartY = event.clientY;
+  cropper.startOffsetX = cropper.offsetX;
+  cropper.startOffsetY = cropper.offsetY;
+  cropElements.stage.setPointerCapture(event.pointerId);
+}
+
+function handleCropPointerMove(event) {
+  if (!cropper.dragging || cropper.pointerId !== event.pointerId) return;
+  cropper.offsetX = cropper.startOffsetX + event.clientX - cropper.dragStartX;
+  cropper.offsetY = cropper.startOffsetY + event.clientY - cropper.dragStartY;
+  clampCropOffset();
+  renderCropper();
+}
+
+function handleCropPointerUp(event) {
+  if (!cropper.dragging || cropper.pointerId !== event.pointerId) return;
+  cropper.dragging = false;
+  cropper.pointerId = null;
+  if (cropElements.stage.hasPointerCapture(event.pointerId)) {
+    cropElements.stage.releasePointerCapture(event.pointerId);
+  }
+}
+
+function handleCropScaleChange() {
+  cropper.scale = Number(cropElements.scaleInput.value) || 1;
+  clampCropOffset();
+  renderCropper();
+}
+
+function handleCropResize() {
+  if (cropElements.modal.hidden || !cropper.image) return;
+  configureCropFrame();
+  fitCropImage();
+  renderCropper();
+}
+
+function setCustomAsset(group, key, source) {
+  if (group === "summary") {
+    state.customTheme.summary = source;
+    return;
+  }
+  if (!state.customTheme[group]) state.customTheme[group] = {};
+  if (source) {
+    state.customTheme[group][key] = source;
+  } else {
+    delete state.customTheme[group][key];
+  }
+}
+
+function applyCrop() {
+  if (!cropper.image) return;
+  const frame = cropper.frame;
+  const layout = getCropImageLayout();
+  const canvas = document.createElement("canvas");
+  canvas.width = cropper.outputWidth;
+  canvas.height = cropper.outputHeight;
+  const context = canvas.getContext("2d");
+
+  if (!context) {
+    elements.settingsFeedback.textContent = "图片处理失败";
+    return;
+  }
+
+  const sourceX = (frame.x - layout.left) / layout.scale;
+  const sourceY = (frame.y - layout.top) / layout.scale;
+  const sourceWidth = frame.width / layout.scale;
+  const sourceHeight = frame.height / layout.scale;
+  const previous = cropper.group === "summary"
+    ? state.customTheme.summary
+    : state.customTheme[cropper.group]?.[cropper.key] || "";
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(
+    cropper.image,
+    sourceX,
+    sourceY,
+    sourceWidth,
+    sourceHeight,
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+  const quality = cropper.group === "tabs" ? 0.86 : 0.78;
+  const source = canvas.toDataURL("image/jpeg", quality);
+  setCustomAsset(cropper.group, cropper.key, source);
+
+  try {
+    saveCustomTheme();
+  } catch {
+    setCustomAsset(cropper.group, cropper.key, previous);
+    elements.settingsFeedback.textContent = "图片太大，保存失败";
+    return;
+  }
+
+  closeCropper();
+  applyTheme("custom");
+  elements.settingsFeedback.textContent = "自定义主题已更新";
+}
+
+function closeCropper() {
+  const resolve = cropper.resolve;
+  cropper.resolve = null;
+  cropper.dragging = false;
+  cropper.pointerId = null;
+  cropper.image = null;
+  cropper.source = "";
+  cropElements.image.removeAttribute("src");
+  cropElements.image.removeAttribute("style");
+  cropElements.modal.hidden = true;
+  document.body.classList.remove("is-cropping");
+  if (resolve) resolve();
+}
+
+function handleCropKeyDown(event) {
+  if (event.key === "Escape" && !cropElements.modal.hidden) {
+    closeCropper();
+  }
 }
 
 function today() {
@@ -584,6 +1064,21 @@ function registerServiceWorker() {
 function bindEvents() {
   elements.tabs.forEach(tab => tab.addEventListener("click", () => setView(tab.dataset.view)));
   elements.themeOptions.forEach(button => button.addEventListener("click", () => applyTheme(button.dataset.themeChoice)));
+  elements.customThemeGrid.addEventListener("change", handleCustomAssetUpload);
+  elements.customThemeGrid.addEventListener("click", handleCustomAssetClear);
+  cropElements.stage.addEventListener("pointerdown", handleCropPointerDown);
+  cropElements.stage.addEventListener("pointermove", handleCropPointerMove);
+  cropElements.stage.addEventListener("pointerup", handleCropPointerUp);
+  cropElements.stage.addEventListener("pointercancel", handleCropPointerUp);
+  cropElements.scaleInput.addEventListener("input", handleCropScaleChange);
+  cropElements.applyButton.addEventListener("click", applyCrop);
+  cropElements.cancelButton.addEventListener("click", closeCropper);
+  cropElements.cancelTopButton.addEventListener("click", closeCropper);
+  cropElements.modal.addEventListener("click", event => {
+    if (event.target === cropElements.modal) closeCropper();
+  });
+  window.addEventListener("resize", handleCropResize);
+  document.addEventListener("keydown", handleCropKeyDown);
   elements.monthInput.addEventListener("change", loadState);
   elements.expenseForm.addEventListener("submit", submitExpense);
   elements.settingsForm.addEventListener("submit", saveSettings);

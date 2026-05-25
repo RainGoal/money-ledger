@@ -169,7 +169,16 @@
                 <span class="theme-preview theme-preview--cute" aria-hidden="true"></span>
                 <span>可爱 Kitty</span>
               </button>
+              <button class="theme-option" type="button" data-theme-choice="custom" aria-pressed="false">
+                <span class="theme-preview theme-preview--custom" aria-hidden="true"></span>
+                <span>自定义</span>
+              </button>
             </div>
+
+            <div class="section-heading custom-heading">
+              <h2>自定义素材</h2>
+            </div>
+            <div id="customThemeGrid" class="custom-theme-grid"></div>
 
             <div class="section-heading">
               <h2>成员</h2>
@@ -228,6 +237,30 @@
           <span class="tab-label">设置</span>
         </button>
       </nav>
+    </div>
+
+    <div id="cropModal" class="crop-modal" hidden>
+      <div class="crop-dialog" role="dialog" aria-modal="true" aria-labelledby="cropTitle">
+        <div class="crop-head">
+          <div>
+            <p class="eyebrow">Crop Image</p>
+            <h2 id="cropTitle">裁剪图片</h2>
+          </div>
+          <button id="cropCancelTopButton" class="custom-clear" type="button" aria-label="关闭裁剪">×</button>
+        </div>
+        <div id="cropStage" class="crop-stage">
+          <img id="cropImage" class="crop-image" alt="">
+          <div id="cropFrame" class="crop-frame" aria-hidden="true"></div>
+        </div>
+        <label class="crop-scale">
+          <span>缩放</span>
+          <input id="cropScaleInput" type="range" min="1" max="3" step="0.01" value="1">
+        </label>
+        <div class="crop-actions">
+          <button id="cropCancelButton" class="ghost-button" type="button">取消</button>
+          <button id="cropApplyButton" class="primary-button" type="button">应用</button>
+        </div>
+      </div>
     </div>
 
     <script src="/app.js" defer></script>
