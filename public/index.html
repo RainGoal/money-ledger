@@ -106,7 +106,7 @@
         }
       }
     </style>
-    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=31">
+    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=32">
   </head>
   <body>
     <div id="startupScreen" class="startup-screen" role="status" aria-live="polite">
@@ -163,6 +163,17 @@
               </article>
             </div>
           </div>
+
+          <section id="budgetAlertPanel" class="budget-alert-panel" aria-label="预算预警" hidden>
+            <div class="budget-alert-head">
+              <span class="budget-alert-icon" aria-hidden="true">!</span>
+              <div>
+                <strong id="budgetAlertTitle">预算预警</strong>
+                <small id="budgetAlertSummary"></small>
+              </div>
+            </div>
+            <div id="budgetAlertList" class="budget-alert-list"></div>
+          </section>
 
           <div class="section-heading">
             <h2>分类进度</h2>
@@ -562,6 +573,15 @@
       </div>
     </div>
 
+    <div id="pwaUpdatePrompt" class="pwa-update-prompt" hidden>
+      <div>
+        <strong>新版本已准备好</strong>
+        <span>刷新后即可使用最新功能</span>
+      </div>
+      <button id="pwaUpdateButton" class="pwa-update-button" type="button">刷新</button>
+      <button id="pwaUpdateDismiss" class="pwa-update-dismiss" type="button" aria-label="稍后再说">×</button>
+    </div>
+
     <script>
       (function () {
         document.addEventListener("click", function (event) {
@@ -594,6 +614,6 @@
         }, true);
       })();
     </script>
-    <script src="__BASE_PATH__/app.js?v=31" defer></script>
+    <script src="__BASE_PATH__/app.js?v=32" defer></script>
   </body>
 </html>

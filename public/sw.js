@@ -1,6 +1,6 @@
-const CACHE_NAME = "money-ledger-v31";
+const CACHE_NAME = "money-ledger-v32";
 const BASE_PATH = "__BASE_PATH__";
-const ASSET_VERSION = "31";
+const ASSET_VERSION = "32";
 const ASSETS = [
   `${BASE_PATH}/`,
   `${BASE_PATH}/index.html`,
@@ -28,6 +28,12 @@ self.addEventListener("activate", event => {
     )
   );
   self.clients.claim();
+});
+
+self.addEventListener("message", event => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("fetch", event => {

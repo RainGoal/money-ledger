@@ -34,6 +34,10 @@ const elements = {
   remainingAmount: document.querySelector("#remainingAmount"),
   dailyAmount: document.querySelector("#dailyAmount"),
   remainingDays: document.querySelector("#remainingDays"),
+  budgetAlertPanel: document.querySelector("#budgetAlertPanel"),
+  budgetAlertTitle: document.querySelector("#budgetAlertTitle"),
+  budgetAlertSummary: document.querySelector("#budgetAlertSummary"),
+  budgetAlertList: document.querySelector("#budgetAlertList"),
   categoryList: document.querySelector("#categoryList"),
   categoryChips: document.querySelector("#categoryChips"),
   memberChips: document.querySelector("#memberChips"),
@@ -94,7 +98,10 @@ const elements = {
   selectedDayList: document.querySelector("#selectedDayList"),
   rankList: document.querySelector("#rankList"),
   successPopup: document.querySelector("#successPopup"),
-  successPopupMessage: document.querySelector("#successPopupMessage")
+  successPopupMessage: document.querySelector("#successPopupMessage"),
+  pwaUpdatePrompt: document.querySelector("#pwaUpdatePrompt"),
+  pwaUpdateButton: document.querySelector("#pwaUpdateButton"),
+  pwaUpdateDismiss: document.querySelector("#pwaUpdateDismiss")
 };
 
 const cropper = {
@@ -184,6 +191,10 @@ state.customTheme = loadCustomTheme();
 state.entryTemplates = loadEntryTemplates();
 state.offlineQueue = loadOfflineQueue();
 state.syncingOfflineQueue = false;
+state.waitingServiceWorker = null;
+state.hasServiceWorkerController = false;
+state.serviceWorkerControllerChanged = false;
+state.reloadForServiceWorkerUpdate = false;
 let successPopupTimer = null;
 
 function cuteTabIcon(view) {
@@ -1018,6 +1029,87 @@ function renderSummary() {
   }
 }
 
+function budgetWarnings() {
+  const warnings = [];
+  const totalPercent = Number(state.data.totals.percent || 0);
+
+  if (totalPercent >= 100) {
+    warnings.push({
+      level: "danger",
+      title: "总预算已超支",
+      detail: `已使用 ${totalPercent}%，超出 ${money(Math.abs(state.data.totals.remaining))}`
+    });
+  } else if (totalPercent >= 90) {
+    warnings.push({
+      level: "danger",
+      title: "总预算接近上限",
+      detail: `已使用 ${totalPercent}%，剩余 ${money(state.data.totals.remaining)}`
+    });
+  } else if (totalPercent >= 80) {
+    warnings.push({
+      level: "warning",
+      title: "总预算使用较快",
+      detail: `已使用 ${totalPercent}%，建议控制接下来几天的支出`
+    });
+  }
+
+  const categoryWarnings = state.data.categories
+    .filter(category => Number(category.percent || 0) >= 80)
+    .sort((a, b) => Number(b.percent || 0) - Number(a.percent || 0));
+
+  categoryWarnings.slice(0, 4).forEach(category => {
+    const overBudget = Number(category.percent || 0) >= 100;
+    warnings.push({
+      level: overBudget ? "danger" : "warning",
+      title: `${categoryIcon(category)} ${category.name}${overBudget ? "已超支" : "接近预算"}`,
+      detail: overBudget
+        ? `已用 ${category.percent}%，超出 ${money(Math.abs(category.remaining))}`
+        : `已用 ${category.percent}%，剩余 ${money(category.remaining)}`
+    });
+  });
+
+  if (categoryWarnings.length > 4) {
+    warnings.push({
+      level: "warning",
+      title: `还有 ${categoryWarnings.length - 4} 个分类需要注意`,
+      detail: "可在分类进度里查看完整预算状态"
+    });
+  }
+
+  return warnings;
+}
+
+function renderBudgetWarnings() {
+  if (!elements.budgetAlertPanel) return;
+
+  const warnings = budgetWarnings();
+  elements.budgetAlertPanel.hidden = warnings.length === 0;
+  elements.budgetAlertPanel.classList.toggle("is-danger", warnings.some(item => item.level === "danger"));
+
+  if (warnings.length === 0) {
+    elements.budgetAlertList.innerHTML = "";
+    elements.budgetAlertSummary.textContent = "";
+    return;
+  }
+
+  const dangerCount = warnings.filter(item => item.level === "danger").length;
+  elements.budgetAlertTitle.textContent = dangerCount > 0 ? "预算风险" : "预算提醒";
+  elements.budgetAlertSummary.textContent = dangerCount > 0
+    ? `${dangerCount} 项已超出或接近上限`
+    : `${warnings.length} 项需要留意`;
+  elements.budgetAlertList.innerHTML = "";
+
+  warnings.forEach(warning => {
+    const item = document.createElement("article");
+    item.className = `budget-alert-item is-${warning.level}`;
+    item.innerHTML = `
+      <strong>${escapeHtml(warning.title)}</strong>
+      <span>${escapeHtml(warning.detail)}</span>
+    `;
+    elements.budgetAlertList.appendChild(item);
+  });
+}
+
 function renderCategories() {
   elements.categoryList.innerHTML = "";
   state.data.categories.forEach((category, index) => {
@@ -1560,6 +1652,7 @@ function renderSettings() {
 
 function render() {
   renderSummary();
+  renderBudgetWarnings();
   renderCategories();
   renderEntryControls();
   renderEntryTemplates();
@@ -2019,6 +2112,32 @@ async function copySummary() {
   }, 1200);
 }
 
+function showPwaUpdatePrompt(worker = null) {
+  state.waitingServiceWorker = worker || state.waitingServiceWorker;
+  if (!elements.pwaUpdatePrompt) return;
+  elements.pwaUpdatePrompt.hidden = false;
+  window.requestAnimationFrame(() => {
+    elements.pwaUpdatePrompt.classList.add("is-visible");
+  });
+}
+
+function hidePwaUpdatePrompt() {
+  if (!elements.pwaUpdatePrompt) return;
+  elements.pwaUpdatePrompt.classList.remove("is-visible");
+  window.setTimeout(() => {
+    elements.pwaUpdatePrompt.hidden = true;
+  }, 180);
+}
+
+function applyPwaUpdate() {
+  if (state.waitingServiceWorker) {
+    state.reloadForServiceWorkerUpdate = true;
+    state.waitingServiceWorker.postMessage({ type: "SKIP_WAITING" });
+    return;
+  }
+  window.location.reload();
+}
+
 function cryptoId() {
   if (window.crypto?.randomUUID) return window.crypto.randomUUID().slice(0, 8);
   return Math.random().toString(16).slice(2, 10);
@@ -2039,7 +2158,36 @@ function escapeAttribute(value) {
 
 function registerServiceWorker() {
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register(withBasePath("/sw.js"), { scope: `${BASE_PATH || ""}/` }).catch(() => {});
+    state.hasServiceWorkerController = Boolean(navigator.serviceWorker.controller);
+
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!state.hasServiceWorkerController || state.serviceWorkerControllerChanged) return;
+      state.serviceWorkerControllerChanged = true;
+      state.waitingServiceWorker = null;
+      if (state.reloadForServiceWorkerUpdate) {
+        window.location.reload();
+        return;
+      }
+      showPwaUpdatePrompt();
+    });
+
+    navigator.serviceWorker.register(withBasePath("/sw.js"), { scope: `${BASE_PATH || ""}/` })
+      .then(registration => {
+        if (registration.waiting && navigator.serviceWorker.controller) {
+          showPwaUpdatePrompt(registration.waiting);
+        }
+
+        registration.addEventListener("updatefound", () => {
+          const worker = registration.installing;
+          if (!worker) return;
+          worker.addEventListener("statechange", () => {
+            if (worker.state === "installed" && navigator.serviceWorker.controller) {
+              showPwaUpdatePrompt(registration.waiting || worker);
+            }
+          });
+        });
+      })
+      .catch(() => {});
   }
 }
 
@@ -2080,6 +2228,8 @@ function bindEvents() {
   elements.clearAllDataButton.addEventListener("click", clearAllData);
   elements.calendarGrid.addEventListener("click", handleCalendarClick);
   elements.copySummaryButton.addEventListener("click", copySummary);
+  elements.pwaUpdateButton?.addEventListener("click", applyPwaUpdate);
+  elements.pwaUpdateDismiss?.addEventListener("click", hidePwaUpdatePrompt);
   window.addEventListener("online", () => syncOfflineQueue());
   window.addEventListener("focus", () => syncOfflineQueue({ silent: true }));
 }
