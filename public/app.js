@@ -44,6 +44,7 @@ const elements = {
   saveTemplateButton: document.querySelector("#saveTemplateButton"),
   templateList: document.querySelector("#templateList"),
   entryFeedback: document.querySelector("#entryFeedback"),
+  offlineQueueStatus: document.querySelector("#offlineQueueStatus"),
   recentList: document.querySelector("#recentList"),
   detailSearchInput: document.querySelector("#detailSearchInput"),
   detailCategoryFilter: document.querySelector("#detailCategoryFilter"),
@@ -151,6 +152,8 @@ const HELLO_KITTY_ICON = assetPath("/hello-kitty-red.jpg");
 
 const CUSTOM_THEME_STORAGE_KEY = "ledgerCustomTheme";
 const ENTRY_TEMPLATE_STORAGE_KEY = "ledgerEntryTemplates";
+const OFFLINE_QUEUE_STORAGE_KEY = "ledgerOfflineExpenseQueue";
+const STATE_CACHE_STORAGE_KEY = "ledgerStateCache";
 const CUSTOM_TAB_SLOTS = [
   { key: "dashboard", label: "首页图标" },
   { key: "details", label: "明细图标" },
@@ -179,6 +182,8 @@ const CATEGORY_ICON_FALLBACKS = ["🍚", "🧴", "🚇", "🎮", "🏠", "💝",
 
 state.customTheme = loadCustomTheme();
 state.entryTemplates = loadEntryTemplates();
+state.offlineQueue = loadOfflineQueue();
+state.syncingOfflineQueue = false;
 let successPopupTimer = null;
 
 function cuteTabIcon(view) {
@@ -275,6 +280,91 @@ function loadEntryTemplates() {
 
 function saveEntryTemplates() {
   localStorage.setItem(ENTRY_TEMPLATE_STORAGE_KEY, JSON.stringify(state.entryTemplates));
+}
+
+function loadOfflineQueue() {
+  try {
+    const value = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_STORAGE_KEY) || "[]");
+    if (!Array.isArray(value)) return [];
+    return value
+      .map(item => ({
+        id: String(item.id || cryptoId()),
+        payload: normalizeQueuedExpensePayload(item.payload),
+        queuedAt: String(item.queuedAt || new Date().toISOString()),
+        attempts: Number(item.attempts || 0),
+        lastError: String(item.lastError || "")
+      }))
+      .filter(item => item.payload);
+  } catch {
+    return [];
+  }
+}
+
+function saveOfflineQueue() {
+  localStorage.setItem(OFFLINE_QUEUE_STORAGE_KEY, JSON.stringify(state.offlineQueue));
+}
+
+function normalizeQueuedExpensePayload(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  const amount = roundMoney(payload.amount);
+  const categoryId = String(payload.categoryId || "").trim();
+  const member = String(payload.member || "").trim();
+  const date = String(payload.date || "").trim();
+  const note = String(payload.note || "").trim().slice(0, 80);
+  if (!Number.isFinite(amount) || amount <= 0 || !categoryId || !member || !isValidDateValue(date)) return null;
+  return { amount, categoryId, member, date, note };
+}
+
+function enqueueOfflineExpense(payload) {
+  state.offlineQueue.push({
+    id: cryptoId(),
+    payload,
+    queuedAt: new Date().toISOString(),
+    attempts: 0,
+    lastError: ""
+  });
+  saveOfflineQueue();
+  renderOfflineQueueStatus();
+}
+
+function renderOfflineQueueStatus() {
+  if (!elements.offlineQueueStatus) return;
+  const count = state.offlineQueue.length;
+  elements.offlineQueueStatus.hidden = count === 0 && !state.syncingOfflineQueue;
+  elements.offlineQueueStatus.classList.toggle("is-syncing", state.syncingOfflineQueue);
+  if (state.syncingOfflineQueue) {
+    elements.offlineQueueStatus.textContent = `正在同步离线记录，剩余 ${count} 笔`;
+    return;
+  }
+  if (count === 0) {
+    elements.offlineQueueStatus.textContent = "";
+    return;
+  }
+  const failed = state.offlineQueue.find(item => item.lastError);
+  elements.offlineQueueStatus.textContent = failed
+    ? `待同步 ${count} 笔，上次失败：${failed.lastError}`
+    : `待同步 ${count} 笔，恢复网络后自动提交`;
+}
+
+function saveCachedTrendStates(month, states) {
+  try {
+    const value = JSON.parse(localStorage.getItem(STATE_CACHE_STORAGE_KEY) || "{}");
+    const byMonth = value.byMonth && typeof value.byMonth === "object" ? value.byMonth : {};
+    byMonth[month] = { savedAt: new Date().toISOString(), states };
+    localStorage.setItem(STATE_CACHE_STORAGE_KEY, JSON.stringify({ byMonth }));
+  } catch {}
+}
+
+function loadCachedTrendStates(month) {
+  try {
+    const value = JSON.parse(localStorage.getItem(STATE_CACHE_STORAGE_KEY) || "{}");
+    const states = value.byMonth?.[month]?.states;
+    if (!Array.isArray(states) || states.length === 0) return null;
+    if (!states[states.length - 1]?.month) return null;
+    return states;
+  } catch {
+    return null;
+  }
 }
 
 function customTabIcon(view) {
@@ -729,13 +819,19 @@ function apiErrorMessage(payload, response) {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(withBasePath(path), {
-    ...options,
-    headers: {
-      ...apiHeaders(),
-      ...(options.headers || {})
-    }
-  });
+  let response;
+  try {
+    response = await fetch(withBasePath(path), {
+      ...options,
+      headers: {
+        ...apiHeaders(),
+        ...(options.headers || {})
+      }
+    });
+  } catch (error) {
+    error.isNetworkError = true;
+    throw error;
+  }
 
   if (response.status === 401) {
     const token = window.prompt("请输入服务器 LEDGER_TOKEN");
@@ -777,6 +873,16 @@ function setView(view) {
   Object.entries(elements.views).forEach(([name, element]) => {
     element.classList.toggle("is-active", name === view);
   });
+}
+
+function isValidDateValue(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || ""));
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
 }
 
 function meterColor(percent) {
@@ -1457,6 +1563,7 @@ function render() {
   renderCategories();
   renderEntryControls();
   renderEntryTemplates();
+  renderOfflineQueueStatus();
   renderDetailFilters();
   renderRecent();
   renderRecordDetail();
@@ -1466,7 +1573,15 @@ function render() {
 
 async function loadState() {
   const month = elements.monthInput.value || today().month;
-  const states = await loadTrendStates(month);
+  let states;
+  try {
+    states = await loadTrendStates(month);
+    saveCachedTrendStates(month, states);
+  } catch (error) {
+    if (!error.isNetworkError) throw error;
+    states = loadCachedTrendStates(month);
+    if (!states) throw new Error("网络不可用，且本机没有可用的离线缓存");
+  }
   state.trendStates = states;
   state.data = states[states.length - 1];
   elements.monthInput.value = state.data.month;
@@ -1474,19 +1589,75 @@ async function loadState() {
   render();
 }
 
+function collectExpensePayload() {
+  const amount = roundMoney(Number(String(elements.amountInput.value).replace(",", ".")));
+  const categoryId = state.selectedCategoryId;
+  const member = state.selectedMember;
+  const date = elements.dateInput.value;
+  const note = elements.noteInput.value.trim().slice(0, 80);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("金额不正确");
+  }
+  if (!state.data.categories.some(category => category.id === categoryId)) {
+    throw new Error("请选择分类");
+  }
+  if (!state.data.members.includes(member)) {
+    throw new Error("请选择成员");
+  }
+  if (!isValidDateValue(date)) {
+    throw new Error("日期不正确");
+  }
+
+  return { amount, categoryId, member, date, note };
+}
+
+async function syncOfflineQueue({ silent = false } = {}) {
+  if (state.syncingOfflineQueue || state.offlineQueue.length === 0 || navigator.onLine === false) {
+    renderOfflineQueueStatus();
+    return { synced: 0, pending: state.offlineQueue.length };
+  }
+
+  state.syncingOfflineQueue = true;
+  renderOfflineQueueStatus();
+
+  let synced = 0;
+
+  while (state.offlineQueue.length > 0) {
+    const item = state.offlineQueue[0];
+    try {
+      await api("/api/expenses", {
+        method: "POST",
+        body: JSON.stringify(item.payload)
+      });
+      state.offlineQueue.shift();
+      saveOfflineQueue();
+      synced += 1;
+    } catch (error) {
+      item.attempts = Number(item.attempts || 0) + 1;
+      item.lastError = error.isNetworkError ? "网络不可用" : error.message;
+      saveOfflineQueue();
+      break;
+    }
+  }
+
+  state.syncingOfflineQueue = false;
+
+  if (synced > 0) {
+    await loadState().catch(() => {});
+    if (!silent) showSuccessPopup(`已同步 ${synced} 笔`);
+  }
+
+  renderOfflineQueueStatus();
+  return { synced, pending: state.offlineQueue.length };
+}
+
 async function submitExpense(event) {
   event.preventDefault();
   elements.entryFeedback.textContent = "提交中...";
-  const amount = Number(String(elements.amountInput.value).replace(",", "."));
 
   try {
-    const payload = {
-      amount,
-      categoryId: state.selectedCategoryId,
-      member: state.selectedMember,
-      date: elements.dateInput.value,
-      note: elements.noteInput.value
-    };
+    const payload = collectExpensePayload();
     const result = await api("/api/expenses", {
       method: "POST",
       body: JSON.stringify(payload)
@@ -1505,6 +1676,19 @@ async function submitExpense(event) {
     showSuccessPopup("记账成功");
     setView("details");
   } catch (error) {
+    if (error.isNetworkError) {
+      try {
+        const payload = collectExpensePayload();
+        enqueueOfflineExpense(payload);
+        elements.amountInput.value = "";
+        elements.noteInput.value = "";
+        elements.entryFeedback.textContent = `网络不可用，已加入待同步队列（${state.offlineQueue.length} 笔）`;
+        showSuccessPopup("已离线保存");
+      } catch (validationError) {
+        elements.entryFeedback.textContent = validationError.message;
+      }
+      return;
+    }
     elements.entryFeedback.textContent = error.message;
   }
 }
@@ -1896,6 +2080,8 @@ function bindEvents() {
   elements.clearAllDataButton.addEventListener("click", clearAllData);
   elements.calendarGrid.addEventListener("click", handleCalendarClick);
   elements.copySummaryButton.addEventListener("click", copySummary);
+  window.addEventListener("online", () => syncOfflineQueue());
+  window.addEventListener("focus", () => syncOfflineQueue({ silent: true }));
 }
 
 function dismissStartupScreen() {
@@ -1916,7 +2102,10 @@ function init() {
   bindEvents();
   registerServiceWorker();
   loadState()
-    .then(dismissStartupScreen)
+    .then(() => {
+      dismissStartupScreen();
+      syncOfflineQueue({ silent: true });
+    })
     .catch(error => {
       document.body.innerHTML = `<main class="app-shell"><div class="empty-state">${escapeHtml(error.message)}</div></main>`;
     });

@@ -1555,6 +1555,27 @@ label {
   margin: 0;
 }
 
+.offline-queue-status[hidden] {
+  display: none;
+}
+
+.offline-queue-status {
+  margin: -2px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--yellow-soft);
+  color: var(--yellow);
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1.45;
+}
+
+.offline-queue-status.is-syncing {
+  background: var(--green-soft);
+  color: var(--green);
+}
+
 .details-intro {
   margin: -4px 0 8px;
   color: var(--muted);
