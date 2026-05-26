@@ -1898,6 +1898,16 @@ function bindEvents() {
   elements.copySummaryButton.addEventListener("click", copySummary);
 }
 
+function dismissStartupScreen() {
+  const startupScreen = document.querySelector("#startupScreen");
+  document.body.classList.add("app-ready");
+  if (startupScreen) {
+    window.setTimeout(() => {
+      startupScreen.hidden = true;
+    }, 220);
+  }
+}
+
 function init() {
   const now = today();
   elements.monthInput.value = now.month;
@@ -1905,9 +1915,11 @@ function init() {
   applyTheme(state.theme);
   bindEvents();
   registerServiceWorker();
-  loadState().catch(error => {
-    document.body.innerHTML = `<main class="app-shell"><div class="empty-state">${escapeHtml(error.message)}</div></main>`;
-  });
+  loadState()
+    .then(dismissStartupScreen)
+    .catch(error => {
+      document.body.innerHTML = `<main class="app-shell"><div class="empty-state">${escapeHtml(error.message)}</div></main>`;
+    });
 }
 
 init();

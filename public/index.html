@@ -19,9 +19,102 @@
         document.documentElement.dataset.theme = "minimal";
       }
     </script>
-    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=29">
+    <style>
+      html,
+      body {
+        min-height: 100%;
+        margin: 0;
+        background: #ffffff;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      html[data-theme="cute"] body {
+        background: #fff7fb;
+      }
+
+      html[data-theme="ios26"] body {
+        background: #eef4ff;
+      }
+
+      .startup-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background: inherit;
+        color: #080808;
+        transition: opacity 180ms ease, visibility 180ms ease;
+      }
+
+      .startup-screen[hidden] {
+        display: none;
+      }
+
+      html[data-theme="cute"] .startup-screen {
+        color: #3a2430;
+      }
+
+      html[data-theme="ios26"] .startup-screen {
+        color: #101827;
+      }
+
+      .startup-card {
+        display: grid;
+        justify-items: center;
+        gap: 12px;
+      }
+
+      .startup-mark {
+        width: 44px;
+        height: 44px;
+        border: 3px solid rgba(255, 53, 28, 0.14);
+        border-top-color: #ff351c;
+        border-radius: 999px;
+        animation: startup-spin 820ms linear infinite;
+      }
+
+      html[data-theme="cute"] .startup-mark {
+        border-color: rgba(232, 75, 123, 0.14);
+        border-top-color: #e84b7b;
+      }
+
+      html[data-theme="ios26"] .startup-mark {
+        border-color: rgba(10, 132, 255, 0.14);
+        border-top-color: #0a84ff;
+      }
+
+      .startup-title {
+        margin: 0;
+        font-size: 0.95rem;
+        font-weight: 850;
+      }
+
+      body.app-ready .startup-screen {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      @keyframes startup-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=30">
   </head>
   <body>
+    <div id="startupScreen" class="startup-screen" role="status" aria-live="polite">
+      <div class="startup-card">
+        <div class="startup-mark" aria-hidden="true"></div>
+        <p class="startup-title">账本加载中</p>
+      </div>
+    </div>
     <div class="app-shell">
       <header class="topbar">
         <div>
@@ -500,6 +593,6 @@
         }, true);
       })();
     </script>
-    <script src="__BASE_PATH__/app.js?v=29" defer></script>
+    <script src="__BASE_PATH__/app.js?v=30" defer></script>
   </body>
 </html>
