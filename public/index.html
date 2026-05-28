@@ -106,7 +106,7 @@
         }
       }
     </style>
-    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=33">
+    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=34">
   </head>
   <body>
     <div id="startupScreen" class="startup-screen" role="status" aria-live="polite">
@@ -222,7 +222,7 @@
 
             <button class="primary-button" type="submit">提交</button>
             <p id="entryFeedback" class="feedback" role="status"></p>
-            <p id="offlineQueueStatus" class="offline-queue-status" role="status" hidden></p>
+            <p id="offlineQueueStatus" class="offline-queue-status" data-offline-queue-status role="status" hidden></p>
           </form>
         </section>
 
@@ -233,6 +233,7 @@
               <a id="exportLink" class="ghost-link" href="__BASE_PATH__/api/export.csv" download="expenses.csv">导出 CSV</a>
             </div>
             <p class="details-intro">按日期倒序展示，每一天的合计会放在组标题右侧。</p>
+            <p class="offline-queue-status" data-offline-queue-status role="status" hidden></p>
             <details class="details-filter-panel">
               <summary>
                 <span>搜索筛选</span>
@@ -659,6 +660,6 @@
         }, true);
       })();
     </script>
-    <script src="__BASE_PATH__/app.js?v=33" defer></script>
+    <script src="__BASE_PATH__/app.js?v=34" defer></script>
   </body>
 </html>

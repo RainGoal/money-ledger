@@ -49,7 +49,7 @@ const elements = {
   saveTemplateButton: document.querySelector("#saveTemplateButton"),
   templateList: document.querySelector("#templateList"),
   entryFeedback: document.querySelector("#entryFeedback"),
-  offlineQueueStatus: document.querySelector("#offlineQueueStatus"),
+  offlineQueueStatus: document.querySelectorAll("[data-offline-queue-status]"),
   recentList: document.querySelector("#recentList"),
   detailSearchInput: document.querySelector("#detailSearchInput"),
   detailCategoryFilter: document.querySelector("#detailCategoryFilter"),
@@ -309,14 +309,8 @@ function loadOfflineQueue() {
     const value = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_STORAGE_KEY) || "[]");
     if (!Array.isArray(value)) return [];
     return value
-      .map(item => ({
-        id: String(item.id || cryptoId()),
-        payload: normalizeQueuedExpensePayload(item.payload),
-        queuedAt: String(item.queuedAt || new Date().toISOString()),
-        attempts: Number(item.attempts || 0),
-        lastError: String(item.lastError || "")
-      }))
-      .filter(item => item.payload);
+      .map(normalizeOfflineQueueItem)
+      .filter(Boolean);
   } catch {
     return [];
   }
@@ -337,35 +331,161 @@ function normalizeQueuedExpensePayload(payload) {
   return { amount, categoryId, member, date, note };
 }
 
-function enqueueOfflineExpense(payload) {
+function normalizeOfflineQueueItem(item) {
+  if (!item || typeof item !== "object") return null;
+  const type = ["create", "update", "delete"].includes(item.type) ? item.type : "create";
+  const base = {
+    id: String(item.id || cryptoId()),
+    type,
+    queuedAt: String(item.queuedAt || new Date().toISOString()),
+    attempts: Number(item.attempts || 0),
+    lastError: String(item.lastError || "")
+  };
+
+  if (type === "create") {
+    const payload = normalizeQueuedExpensePayload(item.payload);
+    if (!payload) return null;
+    return {
+      ...base,
+      localId: String(item.localId || item.expenseId || `local_${base.id}`),
+      payload,
+      month: String(item.month || payload.date.slice(0, 7))
+    };
+  }
+
+  if (type === "update") {
+    const expenseId = String(item.expenseId || "").trim();
+    const payload = normalizeQueuedExpensePayload(item.payload);
+    if (!expenseId || !payload) return null;
+    return {
+      ...base,
+      expenseId,
+      payload,
+      month: String(item.month || payload.date.slice(0, 7))
+    };
+  }
+
+  const expenseId = String(item.expenseId || "").trim();
+  if (!expenseId) return null;
+  return {
+    ...base,
+    expenseId,
+    month: String(item.month || "")
+  };
+}
+
+function localExpenseId() {
+  return `local_${cryptoId()}_${Date.now().toString(36)}`;
+}
+
+function queueItemMatchesExpense(item, expenseId) {
+  return item.expenseId === expenseId || item.localId === expenseId;
+}
+
+function hasQueuedOperationForExpense(expenseId) {
+  return state.offlineQueue.some(item => queueItemMatchesExpense(item, expenseId));
+}
+
+function enqueueOfflineCreate(payload) {
+  const localId = localExpenseId();
   state.offlineQueue.push({
     id: cryptoId(),
+    type: "create",
+    localId,
     payload,
+    month: payload.date.slice(0, 7),
     queuedAt: new Date().toISOString(),
     attempts: 0,
     lastError: ""
   });
   saveOfflineQueue();
   renderOfflineQueueStatus();
+  return localId;
+}
+
+function enqueueOfflineUpdate(expenseId, payload) {
+  const createItem = state.offlineQueue.find(item => item.type === "create" && queueItemMatchesExpense(item, expenseId));
+  if (createItem) {
+    createItem.payload = payload;
+    createItem.month = payload.date.slice(0, 7);
+    createItem.lastError = "";
+    saveOfflineQueue();
+    renderOfflineQueueStatus();
+    return;
+  }
+
+  const updateItem = state.offlineQueue.find(item => item.type === "update" && item.expenseId === expenseId);
+  if (updateItem) {
+    updateItem.payload = payload;
+    updateItem.month = payload.date.slice(0, 7);
+    updateItem.lastError = "";
+  } else {
+    state.offlineQueue.push({
+      id: cryptoId(),
+      type: "update",
+      expenseId,
+      payload,
+      month: payload.date.slice(0, 7),
+      queuedAt: new Date().toISOString(),
+      attempts: 0,
+      lastError: ""
+    });
+  }
+  saveOfflineQueue();
+  renderOfflineQueueStatus();
+}
+
+function enqueueOfflineDelete(expenseId) {
+  const createItem = state.offlineQueue.find(item => item.type === "create" && queueItemMatchesExpense(item, expenseId));
+  if (createItem) {
+    state.offlineQueue = state.offlineQueue.filter(item => !queueItemMatchesExpense(item, expenseId));
+    saveOfflineQueue();
+    renderOfflineQueueStatus();
+    return;
+  }
+
+  state.offlineQueue = state.offlineQueue.filter(item => !(item.type === "update" && item.expenseId === expenseId));
+  if (!state.offlineQueue.some(item => item.type === "delete" && item.expenseId === expenseId)) {
+    state.offlineQueue.push({
+      id: cryptoId(),
+      type: "delete",
+      expenseId,
+      month: state.data?.month || "",
+      queuedAt: new Date().toISOString(),
+      attempts: 0,
+      lastError: ""
+    });
+  }
+  saveOfflineQueue();
+  renderOfflineQueueStatus();
 }
 
 function renderOfflineQueueStatus() {
-  if (!elements.offlineQueueStatus) return;
+  if (!elements.offlineQueueStatus?.length) return;
   const count = state.offlineQueue.length;
-  elements.offlineQueueStatus.hidden = count === 0 && !state.syncingOfflineQueue;
-  elements.offlineQueueStatus.classList.toggle("is-syncing", state.syncingOfflineQueue);
+  const createCount = state.offlineQueue.filter(item => item.type === "create").length;
+  const updateCount = state.offlineQueue.filter(item => item.type === "update").length;
+  const deleteCount = state.offlineQueue.filter(item => item.type === "delete").length;
+  const parts = [
+    createCount ? `新增 ${createCount}` : "",
+    updateCount ? `修改 ${updateCount}` : "",
+    deleteCount ? `删除 ${deleteCount}` : ""
+  ].filter(Boolean).join("，");
+  const hidden = count === 0 && !state.syncingOfflineQueue;
+  let text = "";
   if (state.syncingOfflineQueue) {
-    elements.offlineQueueStatus.textContent = `正在同步离线记录，剩余 ${count} 笔`;
-    return;
+    text = `正在同步离线记录，剩余 ${count} 笔`;
+  } else if (count > 0) {
+    const failed = state.offlineQueue.find(item => item.lastError);
+    text = failed
+      ? `待同步 ${count} 笔（${parts}），上次失败：${failed.lastError}`
+      : `待同步 ${count} 笔（${parts}），恢复网络后自动同步`;
   }
-  if (count === 0) {
-    elements.offlineQueueStatus.textContent = "";
-    return;
-  }
-  const failed = state.offlineQueue.find(item => item.lastError);
-  elements.offlineQueueStatus.textContent = failed
-    ? `待同步 ${count} 笔，上次失败：${failed.lastError}`
-    : `待同步 ${count} 笔，恢复网络后自动提交`;
+  elements.offlineQueueStatus.forEach(element => {
+    element.hidden = hidden;
+    element.classList.toggle("is-syncing", state.syncingOfflineQueue);
+    element.textContent = text;
+  });
 }
 
 function saveCachedTrendStates(month, states) {
@@ -985,6 +1105,125 @@ function groupExpensesByDate(expenses) {
   return groups;
 }
 
+function applyOfflineQueueToState(baseState) {
+  if (!baseState || !Array.isArray(baseState.expenses) || state.offlineQueue.length === 0) return baseState;
+
+  const categoryMap = new Map(baseState.categories.map((category, index) => [
+    category.id,
+    { ...category, icon: categoryIcon(category, index) }
+  ]));
+  const deletedIds = new Set();
+  const byId = new Map(baseState.expenses.map(expense => [expense.id, { ...expense }]));
+
+  state.offlineQueue.forEach(item => {
+    if (item.type === "delete") {
+      deletedIds.add(item.expenseId);
+      byId.delete(item.expenseId);
+      return;
+    }
+
+    if (item.type === "create") {
+      const expense = expenseFromPayload(
+        item.localId,
+        item.payload,
+        baseState,
+        item.queuedAt,
+        item.lastError ? "failed-create" : "pending-create"
+      );
+      if (expense.date.startsWith(baseState.month)) byId.set(expense.id, expense);
+      return;
+    }
+
+    if (item.type === "update") {
+      if (deletedIds.has(item.expenseId)) return;
+      const previous = byId.get(item.expenseId);
+      const expense = expenseFromPayload(
+        item.expenseId,
+        item.payload,
+        baseState,
+        previous?.createdAt || item.queuedAt,
+        item.lastError ? "failed-update" : "pending-update",
+        previous
+      );
+      if (expense.date.startsWith(baseState.month)) {
+        byId.set(expense.id, expense);
+      } else {
+        byId.delete(expense.id);
+      }
+    }
+  });
+
+  const expenses = Array.from(byId.values())
+    .map(expense => enrichExpense(expense, categoryMap))
+    .sort(sortExpenses);
+  return rebuildStateFromExpenses(baseState, expenses);
+}
+
+function rebuildStateFromExpenses(baseState, expenses) {
+  const categories = baseState.categories.map(category => {
+    const spent = roundMoney(expenses
+      .filter(expense => expense.categoryId === category.id)
+      .reduce((sum, expense) => sum + Number(expense.amount || 0), 0));
+    const remaining = roundMoney(category.limit - spent);
+    const percent = category.limit > 0 ? Math.min(999, Math.round((spent / category.limit) * 100)) : 0;
+    const dailyRemaining = baseState.totals.remainingDays > 0 ? roundMoney(Math.max(remaining, 0) / baseState.totals.remainingDays) : 0;
+    return { ...category, spent, remaining, percent, dailyRemaining };
+  });
+  const totals = recalculateTotals(baseState, categories, expenses);
+
+  return { ...baseState, categories, expenses, totals };
+}
+
+function expenseFromPayload(id, payload, baseState, createdAt, syncStatus, previous = {}) {
+  return {
+    ...previous,
+    id,
+    date: payload.date,
+    member: payload.member,
+    categoryId: payload.categoryId,
+    amount: payload.amount,
+    note: payload.note || "",
+    createdAt: createdAt || new Date().toISOString(),
+    updatedAt: syncStatus === "pending-create" ? previous.updatedAt : new Date().toISOString(),
+    syncStatus
+  };
+}
+
+function enrichExpense(expense, categoryMap) {
+  const category = categoryMap.get(expense.categoryId);
+  return {
+    ...expense,
+    categoryName: category?.name || expense.categoryName || "未分类",
+    categoryIcon: category?.icon || expense.categoryIcon || "🧾",
+    categoryColor: category?.color || expense.categoryColor || "#777777"
+  };
+}
+
+function sortExpenses(a, b) {
+  if (a.date === b.date) return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+  return String(b.date || "").localeCompare(String(a.date || ""));
+}
+
+function recalculateTotals(baseState, categories, expenses) {
+  const budget = roundMoney(categories.reduce((sum, category) => sum + Number(category.limit || 0), 0));
+  const spent = roundMoney(expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0));
+  const remaining = roundMoney(budget - spent);
+  const elapsedDays = Number(baseState.totals.elapsedDays || 0);
+  const daysInMonth = Number(baseState.totals.daysInMonth || 1);
+  const remainingDays = Number(baseState.totals.remainingDays || 0);
+  const expectedByToday = roundMoney((budget * elapsedDays) / Math.max(daysInMonth, 1));
+  return {
+    ...baseState.totals,
+    budget,
+    spent,
+    remaining,
+    percent: budget > 0 ? Math.min(999, Math.round((spent / budget) * 100)) : 0,
+    dailyRemaining: remainingDays > 0 ? roundMoney(Math.max(remaining, 0) / remainingDays) : 0,
+    expectedByToday,
+    paceDelta: roundMoney(spent - expectedByToday)
+  };
+}
+
 function monthParts(month) {
   const [year, monthNumber] = String(month || "").split("-").map(Number);
   return { year, monthNumber, monthIndex: monthNumber - 1 };
@@ -1006,8 +1245,11 @@ async function loadTrendStates(month) {
 }
 
 function replaceTrendState(nextState) {
-  const replaced = state.trendStates.map(item => item.month === nextState.month ? nextState : item);
-  state.trendStates = replaced.some(item => item === nextState) ? replaced : [...replaced.slice(1), nextState];
+  const optimisticState = applyOfflineQueueToState(nextState);
+  const replaced = state.trendStates.map(item => item.month === optimisticState.month ? optimisticState : item);
+  state.trendStates = replaced.some(item => item === optimisticState) ? replaced : [...replaced.slice(1), optimisticState];
+  saveCachedTrendStates(optimisticState.month, state.trendStates);
+  return optimisticState;
 }
 
 function monthLabel(month) {
@@ -1284,6 +1526,16 @@ function detailSearchText(expense) {
   ].join(" ").toLowerCase();
 }
 
+function syncStatusLabel(status) {
+  const labels = {
+    "pending-create": "待同步新增",
+    "pending-update": "待同步修改",
+    "failed-create": "新增失败",
+    "failed-update": "修改失败"
+  };
+  return labels[status] || "";
+}
+
 function filteredExpenses(expenses) {
   const query = state.detailFilters.query.trim().toLowerCase();
   return expenses.filter(expense => {
@@ -1323,7 +1575,8 @@ function renderRecent() {
 
     group.items.forEach(expense => {
       const item = document.createElement("div");
-      item.className = "day-item day-item-button";
+      const statusLabel = syncStatusLabel(expense.syncStatus);
+      item.className = `day-item day-item-button${statusLabel ? " is-pending-sync" : ""}`;
       item.dataset.expenseId = expense.id;
       item.tabIndex = 0;
       item.setAttribute("role", "button");
@@ -1339,6 +1592,7 @@ function renderRecent() {
         </div>
         <div class="day-item-side">
           <div class="recent-amount">-${money(expense.amount)}</div>
+          ${statusLabel ? `<span class="sync-status-pill">${escapeHtml(statusLabel)}</span>` : ""}
           <span class="record-member-pill">${escapeHtml(expense.member)}</span>
           <span class="detail-chevron" aria-hidden="true">›</span>
         </div>
@@ -1397,7 +1651,7 @@ function renderRecordDetail() {
   elements.recordAmountInput.value = expense.amount;
   elements.recordDateInput.value = expense.date;
   elements.recordNoteInput.value = expense.note || "";
-  elements.recordFeedback.textContent = "";
+  elements.recordFeedback.textContent = syncStatusLabel(expense.syncStatus);
 
   elements.recordCategorySelect.innerHTML = "";
   state.data.categories.forEach((category, index) => {
@@ -1471,8 +1725,9 @@ function renderSelectedDayDetails(dayMap) {
   }
 
   info.items.forEach(expense => {
+    const statusLabel = syncStatusLabel(expense.syncStatus);
     const item = document.createElement("div");
-    item.className = "calendar-expense";
+    item.className = `calendar-expense${statusLabel ? " is-pending-sync" : ""}`;
     item.style.setProperty("--accent", expense.categoryColor || "#27845b");
     item.innerHTML = `
       <div class="day-item-main">
@@ -1480,7 +1735,7 @@ function renderSelectedDayDetails(dayMap) {
           <span class="category-icon" aria-hidden="true">${escapeHtml(expense.categoryIcon || "🧾")}</span>
           <span>${escapeHtml(expense.categoryName)}</span>
         </div>
-        <div class="recent-meta">${escapeHtml(expense.member)}${expense.note ? ` · ${escapeHtml(expense.note)}` : ""}</div>
+        <div class="recent-meta">${escapeHtml(expense.member)}${expense.note ? ` · ${escapeHtml(expense.note)}` : ""}${statusLabel ? ` · ${escapeHtml(statusLabel)}` : ""}</div>
       </div>
       <strong class="calendar-expense-amount">-${money(expense.amount)}</strong>
     `;
@@ -1851,8 +2106,8 @@ async function loadState() {
     states = loadCachedTrendStates(month);
     if (!states) throw new Error("网络不可用，且本机没有可用的离线缓存");
   }
-  state.trendStates = states;
-  state.data = states[states.length - 1];
+  state.trendStates = states.map(item => applyOfflineQueueToState(item));
+  state.data = state.trendStates[state.trendStates.length - 1];
   elements.monthInput.value = state.data.month;
   elements.dateInput.value = state.data.month === today().month ? state.data.today : `${state.data.month}-01`;
   render();
@@ -1895,10 +2150,7 @@ async function syncOfflineQueue({ silent = false } = {}) {
   while (state.offlineQueue.length > 0) {
     const item = state.offlineQueue[0];
     try {
-      await api("/api/expenses", {
-        method: "POST",
-        body: JSON.stringify(item.payload)
-      });
+      await syncOfflineQueueItem(item);
       state.offlineQueue.shift();
       saveOfflineQueue();
       synced += 1;
@@ -1919,6 +2171,53 @@ async function syncOfflineQueue({ silent = false } = {}) {
 
   renderOfflineQueueStatus();
   return { synced, pending: state.offlineQueue.length };
+}
+
+async function syncOfflineQueueItem(item) {
+  if (item.type === "create") {
+    const result = await api("/api/expenses", {
+      method: "POST",
+      body: JSON.stringify(item.payload)
+    });
+    const serverId = result.expense?.id;
+    if (serverId && item.localId) {
+      replaceQueuedExpenseId(item.localId, serverId);
+      if (state.selectedExpenseId === item.localId) state.selectedExpenseId = serverId;
+    }
+    return result;
+  }
+
+  if (item.type === "update") {
+    return api(`/api/expenses/${encodeURIComponent(item.expenseId)}?month=${encodeURIComponent(item.month || state.data.month)}`, {
+      method: "PUT",
+      body: JSON.stringify(item.payload)
+    });
+  }
+
+  if (item.type === "delete") {
+    return api(`/api/expenses/${encodeURIComponent(item.expenseId)}?month=${encodeURIComponent(item.month || state.data.month)}`, {
+      method: "DELETE"
+    });
+  }
+
+  throw new Error("离线队列类型不正确");
+}
+
+function replaceQueuedExpenseId(localId, serverId) {
+  state.offlineQueue.forEach(item => {
+    if (item.expenseId === localId) item.expenseId = serverId;
+    if (item.localId === localId) item.localId = serverId;
+  });
+  if (state.data) {
+    state.data.expenses.forEach(expense => {
+      if (expense.id === localId) expense.id = serverId;
+    });
+  }
+  state.trendStates.forEach(trendState => {
+    trendState.expenses?.forEach(expense => {
+      if (expense.id === localId) expense.id = serverId;
+    });
+  });
 }
 
 async function submitExpense(event) {
@@ -1948,11 +2247,14 @@ async function submitExpense(event) {
     if (error.isNetworkError) {
       try {
         const payload = collectExpensePayload();
-        enqueueOfflineExpense(payload);
+        const localId = enqueueOfflineCreate(payload);
+        applyOfflineCreate(localId, payload);
         elements.amountInput.value = "";
         elements.noteInput.value = "";
         elements.entryFeedback.textContent = `网络不可用，已加入待同步队列（${state.offlineQueue.length} 笔）`;
+        render();
         showSuccessPopup("已离线保存");
+        setView("details");
       } catch (validationError) {
         elements.entryFeedback.textContent = validationError.message;
       }
@@ -1960,6 +2262,13 @@ async function submitExpense(event) {
     }
     elements.entryFeedback.textContent = error.message;
   }
+}
+
+function applyOfflineCreate(localId, payload) {
+  if (!state.data) return;
+  const nextState = applyOfflineQueueToState(state.data);
+  state.data = nextState;
+  replaceTrendState(nextState);
 }
 
 function collectCurrentTemplate() {
@@ -2065,9 +2374,22 @@ async function saveRecordDetail(event) {
   event.preventDefault();
   if (!state.selectedExpenseId) return;
   elements.recordFeedback.textContent = "保存中...";
+  const expenseId = state.selectedExpenseId;
 
   try {
-    const result = await api(`/api/expenses/${encodeURIComponent(state.selectedExpenseId)}?month=${encodeURIComponent(state.data.month)}`, {
+    if (hasQueuedOperationForExpense(expenseId)) {
+      const payload = normalizeQueuedExpensePayload(collectRecordDetail());
+      if (!payload) throw new Error("记录内容不正确");
+      enqueueOfflineUpdate(expenseId, payload);
+      applyOfflineMutation();
+      state.selectedExpenseId = null;
+      render();
+      showRecordList();
+      showSuccessPopup("已更新待同步修改");
+      return;
+    }
+
+    const result = await api(`/api/expenses/${encodeURIComponent(expenseId)}?month=${encodeURIComponent(state.data.month)}`, {
       method: "PUT",
       body: JSON.stringify(collectRecordDetail())
     });
@@ -2077,15 +2399,64 @@ async function saveRecordDetail(event) {
     render();
     showSuccessPopup("保存成功");
   } catch (error) {
+    if (error.isNetworkError) {
+      try {
+        const payload = normalizeQueuedExpensePayload(collectRecordDetail());
+        if (!payload) throw new Error("记录内容不正确");
+        enqueueOfflineUpdate(expenseId, payload);
+        applyOfflineMutation();
+        state.selectedExpenseId = null;
+        render();
+        showRecordList();
+        showSuccessPopup("已离线保存修改");
+      } catch (validationError) {
+        elements.recordFeedback.textContent = validationError.message;
+      }
+      return;
+    }
     elements.recordFeedback.textContent = error.message;
   }
 }
 
 function deleteSelectedExpense() {
   if (!state.selectedExpenseId) return;
+  if (hasQueuedOperationForExpense(state.selectedExpenseId)) {
+    enqueueOfflineDelete(state.selectedExpenseId);
+    applyOfflineMutation();
+    state.selectedExpenseId = null;
+    render();
+    showRecordList();
+    showSuccessPopup("已从待同步队列移除");
+    return;
+  }
   deleteExpense(state.selectedExpenseId).catch(error => {
+    if (error.isNetworkError) {
+      enqueueOfflineDelete(state.selectedExpenseId);
+      applyOfflineMutation();
+      state.selectedExpenseId = null;
+      render();
+      showRecordList();
+      showSuccessPopup("已离线删除");
+      return;
+    }
     elements.recordFeedback.textContent = error.message;
   });
+}
+
+function applyOfflineMutation() {
+  if (!state.data) return;
+  const queuedIds = new Set();
+  state.offlineQueue.forEach(item => {
+    if (item.localId) queuedIds.add(item.localId);
+    if (item.expenseId) queuedIds.add(item.expenseId);
+  });
+  const baseState = {
+    ...state.data,
+    expenses: state.data.expenses.filter(expense => !expense.id.startsWith("local_") || queuedIds.has(expense.id))
+  };
+  const nextState = applyOfflineQueueToState(rebuildStateFromExpenses(baseState, baseState.expenses));
+  state.data = nextState;
+  replaceTrendState(nextState);
 }
 
 function collectBudgetRows() {
