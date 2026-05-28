@@ -1,6 +1,6 @@
-const CACHE_NAME = "money-ledger-v32";
+const CACHE_NAME = "money-ledger-v33";
 const BASE_PATH = "__BASE_PATH__";
-const ASSET_VERSION = "32";
+const ASSET_VERSION = "33";
 const ASSETS = [
   `${BASE_PATH}/`,
   `${BASE_PATH}/index.html`,
@@ -50,6 +50,43 @@ self.addEventListener("fetch", event => {
   }
 
   event.respondWith(staleWhileRevalidate(event.request));
+});
+
+self.addEventListener("push", event => {
+  let payload = {};
+  if (event.data) {
+    try {
+      payload = event.data.json();
+    } catch {
+      payload = { body: event.data.text() };
+    }
+  }
+
+  const title = payload.title || "月度预算";
+  const options = {
+    body: payload.body || "",
+    icon: payload.icon || `${BASE_PATH}/icon.svg`,
+    badge: payload.badge || `${BASE_PATH}/icon.svg`,
+    tag: payload.tag || "money-ledger",
+    data: {
+      url: payload.url || `${BASE_PATH}/`
+    }
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+self.addEventListener("notificationclick", event => {
+  event.notification.close();
+  const targetUrl = new URL(event.notification.data?.url || `${BASE_PATH}/`, self.location.origin).href;
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(clients => {
+      const existing = clients.find(client => client.url === targetUrl || client.url.startsWith(targetUrl));
+      if (existing) return existing.focus();
+      return self.clients.openWindow(targetUrl);
+    })
+  );
 });
 
 async function navigationResponse(request) {

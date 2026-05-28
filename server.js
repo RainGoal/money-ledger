@@ -2,11 +2,16 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const webpush = require("web-push");
 const { DatabaseSync } = require("node:sqlite");
 
 const PORT = Number(process.env.PORT || 5173);
 const TOKEN = process.env.LEDGER_TOKEN || "";
 const BASE_PATH = normalizeBasePath(process.env.BASE_PATH || "");
+const VAPID_PUBLIC_KEY = String(process.env.VAPID_PUBLIC_KEY || "").trim();
+const VAPID_PRIVATE_KEY = String(process.env.VAPID_PRIVATE_KEY || "").trim();
+const VAPID_SUBJECT = String(process.env.VAPID_SUBJECT || "mailto:admin@example.com").trim();
+const NOTIFICATION_CHECK_INTERVAL_MS = Math.max(15000, Number(process.env.NOTIFICATION_CHECK_INTERVAL_MS || 60000));
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, "public");
 const DATA_DIR = path.join(ROOT, "data");
@@ -165,7 +170,41 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
     CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category_id);
     CREATE INDEX IF NOT EXISTS idx_expenses_member ON expenses(member);
+
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      endpoint TEXT PRIMARY KEY,
+      subscription_json TEXT NOT NULL,
+      user_agent TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS notification_preferences (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      push_enabled INTEGER NOT NULL DEFAULT 0,
+      budget_alerts_enabled INTEGER NOT NULL DEFAULT 1,
+      daily_reminder_enabled INTEGER NOT NULL DEFAULT 0,
+      daily_reminder_time TEXT NOT NULL DEFAULT '21:30',
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS notification_events (
+      event_key TEXT PRIMARY KEY,
+      sent_at TEXT NOT NULL
+    );
   `);
+
+  db.prepare(`
+    INSERT OR IGNORE INTO notification_preferences (
+      id,
+      push_enabled,
+      budget_alerts_enabled,
+      daily_reminder_enabled,
+      daily_reminder_time,
+      updated_at
+    )
+    VALUES (1, 0, 1, 0, '21:30', ?)
+  `).run(new Date().toISOString());
 
   seedDatabaseIfNeeded();
 }
@@ -275,6 +314,7 @@ function replaceAllData(input) {
       DELETE FROM monthly_budgets;
       DELETE FROM categories;
       DELETE FROM members;
+      DELETE FROM notification_events;
     `);
     insertData(normalized);
   });
@@ -386,6 +426,306 @@ function saveSettingsData(members, categories, month) {
   });
 }
 
+function initPushService() {
+  if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+}
+
+function isPushConfigured() {
+  return Boolean(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY);
+}
+
+function normalizeSubscription(input) {
+  if (!input || typeof input !== "object") return null;
+  const endpoint = String(input.endpoint || "").trim();
+  const p256dh = String(input.keys?.p256dh || "").trim();
+  const auth = String(input.keys?.auth || "").trim();
+  if (!endpoint || !p256dh || !auth) return null;
+  return {
+    endpoint,
+    expirationTime: input.expirationTime || null,
+    keys: { p256dh, auth }
+  };
+}
+
+function savePushSubscription(subscription, userAgent = "") {
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO push_subscriptions (endpoint, subscription_json, user_agent, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(endpoint) DO UPDATE SET
+      subscription_json = excluded.subscription_json,
+      user_agent = excluded.user_agent,
+      updated_at = excluded.updated_at
+  `).run(
+    subscription.endpoint,
+    JSON.stringify(subscription),
+    String(userAgent || "").slice(0, 240),
+    now,
+    now
+  );
+}
+
+function deletePushSubscription(endpoint) {
+  if (!endpoint) return 0;
+  return db.prepare("DELETE FROM push_subscriptions WHERE endpoint = ?").run(endpoint).changes;
+}
+
+function pushSubscriptionCount() {
+  return Number(db.prepare("SELECT COUNT(*) AS count FROM push_subscriptions").get()?.count || 0);
+}
+
+function loadPushSubscriptions() {
+  return db.prepare("SELECT endpoint, subscription_json AS subscriptionJson FROM push_subscriptions").all()
+    .map(row => {
+      try {
+        return { endpoint: row.endpoint, subscription: JSON.parse(row.subscriptionJson) };
+      } catch {
+        return null;
+      }
+    })
+    .filter(item => item?.subscription?.endpoint);
+}
+
+function normalizeNotificationPreferences(input, current = getNotificationPreferences()) {
+  const time = String(input?.dailyReminderTime || current.dailyReminderTime || "21:30").trim();
+  return {
+    pushEnabled: Boolean(input?.pushEnabled),
+    budgetAlertsEnabled: input?.budgetAlertsEnabled !== false,
+    dailyReminderEnabled: Boolean(input?.dailyReminderEnabled),
+    dailyReminderTime: isValidTime(time) ? time : current.dailyReminderTime
+  };
+}
+
+function getNotificationPreferences() {
+  const row = db.prepare(`
+    SELECT
+      push_enabled AS pushEnabled,
+      budget_alerts_enabled AS budgetAlertsEnabled,
+      daily_reminder_enabled AS dailyReminderEnabled,
+      daily_reminder_time AS dailyReminderTime
+    FROM notification_preferences
+    WHERE id = 1
+  `).get();
+  return {
+    pushEnabled: Boolean(row?.pushEnabled),
+    budgetAlertsEnabled: row?.budgetAlertsEnabled !== 0,
+    dailyReminderEnabled: Boolean(row?.dailyReminderEnabled),
+    dailyReminderTime: isValidTime(row?.dailyReminderTime) ? row.dailyReminderTime : "21:30"
+  };
+}
+
+function saveNotificationPreferences(input) {
+  const preferences = normalizeNotificationPreferences(input);
+  db.prepare(`
+    UPDATE notification_preferences
+    SET
+      push_enabled = ?,
+      budget_alerts_enabled = ?,
+      daily_reminder_enabled = ?,
+      daily_reminder_time = ?,
+      updated_at = ?
+    WHERE id = 1
+  `).run(
+    preferences.pushEnabled ? 1 : 0,
+    preferences.budgetAlertsEnabled ? 1 : 0,
+    preferences.dailyReminderEnabled ? 1 : 0,
+    preferences.dailyReminderTime,
+    new Date().toISOString()
+  );
+  return preferences;
+}
+
+function isValidTime(value) {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value || ""));
+}
+
+function notificationStatusPayload() {
+  return {
+    configured: isPushConfigured(),
+    subscriptionCount: pushSubscriptionCount(),
+    preferences: getNotificationPreferences()
+  };
+}
+
+async function sendPushPayload(payload) {
+  if (!isPushConfigured()) {
+    const error = new Error("push_not_configured");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const subscriptions = loadPushSubscriptions();
+  if (subscriptions.length === 0) {
+    const error = new Error("push_subscription_missing");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const body = JSON.stringify({
+    badge: `${BASE_PATH || ""}/icon.svg`,
+    icon: `${BASE_PATH || ""}/icon.svg`,
+    url: `${BASE_PATH || ""}/`,
+    ...payload
+  });
+  let sent = 0;
+  let removed = 0;
+  let failed = 0;
+  let lastError = "";
+
+  await Promise.all(subscriptions.map(async item => {
+    try {
+      await webpush.sendNotification(item.subscription, body, { TTL: 60 * 60, urgency: "normal" });
+      sent += 1;
+    } catch (error) {
+      if (error.statusCode === 404 || error.statusCode === 410) {
+        deletePushSubscription(item.endpoint);
+        removed += 1;
+      } else {
+        failed += 1;
+        lastError = error.message || "push_send_failed";
+        console.error("Push notification failed:", error.message || error);
+      }
+    }
+  }));
+
+  if (sent === 0 && subscriptions.length > 0 && removed === subscriptions.length) {
+    const error = new Error("push_subscription_missing");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (sent === 0 && failed > 0) {
+    const error = new Error("push_send_failed");
+    error.detail = lastError;
+    error.statusCode = 502;
+    throw error;
+  }
+
+  return { sent, removed };
+}
+
+function expenseCountForDate(date) {
+  return Number(db.prepare("SELECT COUNT(*) AS count FROM expenses WHERE date = ?").get(date)?.count || 0);
+}
+
+function markNotificationEvent(eventKey) {
+  db.prepare(`
+    INSERT INTO notification_events (event_key, sent_at)
+    VALUES (?, ?)
+    ON CONFLICT(event_key) DO NOTHING
+  `).run(eventKey, new Date().toISOString());
+}
+
+function hasNotificationEvent(eventKey) {
+  return Boolean(db.prepare("SELECT 1 FROM notification_events WHERE event_key = ?").get(eventKey));
+}
+
+function notificationThreshold(percent) {
+  const value = Number(percent || 0);
+  if (value >= 100) return 100;
+  if (value >= 90) return 90;
+  if (value >= 80) return 80;
+  return 0;
+}
+
+function budgetAlertCandidates(state) {
+  const items = [];
+  const totalThreshold = notificationThreshold(state.totals.percent);
+  if (totalThreshold) {
+    items.push({
+      key: `budget:${state.month}:total:${totalThreshold}`,
+      title: totalThreshold >= 100 ? "总预算已超支" : "总预算接近上限",
+      body: `本月总预算已使用 ${state.totals.percent}%，已花 ${state.totals.spent.toFixed(2)}。`,
+      url: `${BASE_PATH || ""}/`
+    });
+  }
+
+  state.categories.forEach(category => {
+    const threshold = notificationThreshold(category.percent);
+    if (!threshold) return;
+    items.push({
+      key: `budget:${state.month}:category:${category.id}:${threshold}`,
+      title: threshold >= 100 ? `${category.name} 已超支` : `${category.name} 接近预算`,
+      body: `已使用 ${category.percent}%，已花 ${category.spent.toFixed(2)} / ${category.limit.toFixed(2)}。`,
+      url: `${BASE_PATH || ""}/`
+    });
+  });
+
+  return items;
+}
+
+async function checkBudgetNotifications() {
+  const preferences = getNotificationPreferences();
+  if (!preferences.pushEnabled || !preferences.budgetAlertsEnabled) return { sent: 0, removed: 0 };
+
+  const state = buildState(loadData(), currentMonth());
+  const candidates = budgetAlertCandidates(state).filter(item => !hasNotificationEvent(item.key));
+  let sent = 0;
+  let removed = 0;
+
+  for (const item of candidates) {
+    const result = await sendPushPayload({
+      type: "budget-alert",
+      title: item.title,
+      body: item.body,
+      url: item.url,
+      tag: item.key
+    });
+    if (result.sent > 0) markNotificationEvent(item.key);
+    sent += result.sent;
+    removed += result.removed;
+  }
+
+  return { sent, removed };
+}
+
+async function checkDailyReminderNotification() {
+  const preferences = getNotificationPreferences();
+  if (!preferences.pushEnabled || !preferences.dailyReminderEnabled) return { sent: 0, removed: 0 };
+
+  const now = localDateParts();
+  const [targetHour, targetMinute] = preferences.dailyReminderTime.split(":").map(Number);
+  if (now.hour !== targetHour || now.minute < targetMinute) return { sent: 0, removed: 0 };
+
+  const date = currentDate();
+  const eventKey = `daily:${date}:${preferences.dailyReminderTime}`;
+  if (hasNotificationEvent(eventKey) || expenseCountForDate(date) > 0) return { sent: 0, removed: 0 };
+
+  const result = await sendPushPayload({
+    type: "daily-reminder",
+    title: "今天还没有记账",
+    body: "打开账本补一笔今天的消费。",
+    url: `${BASE_PATH || ""}/`,
+    tag: eventKey
+  });
+
+  if (result.sent > 0) markNotificationEvent(eventKey);
+  return result;
+}
+
+let notificationCheckRunning = false;
+
+async function runNotificationChecks() {
+  if (notificationCheckRunning || !isPushConfigured()) return;
+  notificationCheckRunning = true;
+  try {
+    await checkBudgetNotifications();
+    await checkDailyReminderNotification();
+  } catch (error) {
+    if (error.message !== "push_subscription_missing") {
+      console.error("Notification check failed:", error.message || error);
+    }
+  } finally {
+    notificationCheckRunning = false;
+  }
+}
+
+function startNotificationScheduler() {
+  if (!isPushConfigured()) return;
+  setInterval(runNotificationChecks, NOTIFICATION_CHECK_INTERVAL_MS).unref();
+  runNotificationChecks();
+}
+
 function send(res, status, body, contentType = "application/json; charset=utf-8") {
   res.writeHead(status, {
     "Content-Type": contentType,
@@ -445,7 +785,9 @@ function localDateParts(date = new Date()) {
   return {
     year: date.getFullYear(),
     month: date.getMonth() + 1,
-    day: date.getDate()
+    day: date.getDate(),
+    hour: date.getHours(),
+    minute: date.getMinutes()
   };
 }
 
@@ -773,6 +1115,69 @@ async function handleApi(req, res, url) {
   const data = loadData();
   const month = url.searchParams.get("month") || currentMonth();
 
+  if (req.method === "GET" && url.pathname === "/api/push/public-key") {
+    sendJson(res, 200, {
+      configured: isPushConfigured(),
+      publicKey: VAPID_PUBLIC_KEY
+    });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/notifications/status") {
+    sendJson(res, 200, notificationStatusPayload());
+    return;
+  }
+
+  if (req.method === "PUT" && url.pathname === "/api/notifications/preferences") {
+    const payload = await readJson(req);
+    const preferences = saveNotificationPreferences(payload);
+    if (!preferences.pushEnabled) {
+      db.prepare("DELETE FROM push_subscriptions").run();
+    }
+    sendJson(res, 200, notificationStatusPayload());
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/push/subscribe") {
+    if (!isPushConfigured()) {
+      sendJson(res, 400, { error: "push_not_configured" });
+      return;
+    }
+
+    const payload = await readJson(req);
+    const subscription = normalizeSubscription(payload.subscription || payload);
+    if (!subscription) {
+      sendJson(res, 400, { error: "invalid_push_subscription" });
+      return;
+    }
+
+    savePushSubscription(subscription, req.headers["user-agent"]);
+    saveNotificationPreferences({ ...getNotificationPreferences(), pushEnabled: true });
+    sendJson(res, 200, notificationStatusPayload());
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/push/unsubscribe") {
+    const payload = await readJson(req);
+    const endpoint = String(payload.endpoint || payload.subscription?.endpoint || "").trim();
+    if (endpoint) deletePushSubscription(endpoint);
+    saveNotificationPreferences({ ...getNotificationPreferences(), pushEnabled: false });
+    sendJson(res, 200, notificationStatusPayload());
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/push/test") {
+    const result = await sendPushPayload({
+      type: "test",
+      title: "推送测试成功",
+      body: "Money Ledger 已经可以发送提醒。",
+      url: `${BASE_PATH || ""}/`,
+      tag: `test-${Date.now()}`
+    });
+    sendJson(res, 200, { ok: true, ...result, status: notificationStatusPayload() });
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/state") {
     sendJson(res, 200, buildState(data, month));
     return;
@@ -871,6 +1276,11 @@ async function handleApi(req, res, url) {
     };
     insertExpense(expense);
     const nextState = buildState(loadData(), date.slice(0, 7));
+    checkBudgetNotifications().catch(error => {
+      if (error.message !== "push_subscription_missing") {
+        console.error("Budget notification failed:", error.message || error);
+      }
+    });
     sendJson(res, 201, { expense, state: nextState });
     return;
   }
@@ -944,6 +1354,11 @@ async function handleApi(req, res, url) {
 
     const nextMembers = members || data.members;
     saveSettingsData(nextMembers, categories, safeMonth);
+    checkBudgetNotifications().catch(error => {
+      if (error.message !== "push_subscription_missing") {
+        console.error("Budget notification failed:", error.message || error);
+      }
+    });
     sendJson(res, 200, buildState(loadData(), safeMonth));
     return;
   }
@@ -1001,11 +1416,16 @@ const server = http.createServer(async (req, res) => {
 });
 
 initDatabase();
+initPushService();
+startNotificationScheduler();
 
 server.listen(PORT, () => {
   console.log(`Money Ledger PWA running at http://localhost:${PORT}${BASE_PATH || ""}`);
   console.log(`SQLite data file: ${SQLITE_FILE}`);
   if (!TOKEN) {
     console.log("LEDGER_TOKEN is not set. Set it before deploying to a public server.");
+  }
+  if (!isPushConfigured()) {
+    console.log("Web Push is not configured. Set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY to enable notifications.");
   }
 });

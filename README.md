@@ -16,6 +16,7 @@
 - 数据备份：支持 JSON 导出、导入备份。
 - 危险操作保护：清除全部数据需要二次确认。
 - PWA：支持添加到手机主屏幕使用，离线记账会先进入本地队列，恢复网络后自动同步，并在发现新版本后提示刷新。
+- 推送通知：支持预算阈值预警、每日未记账提醒和测试通知。iOS 需要先添加到主屏幕后开启。
 - iOS 快捷指令：可通过后端 API 快捷记账或获取每日摘要。
 
 ## 技术栈
@@ -24,6 +25,7 @@
 - Node 内置 `node:sqlite`
 - 原生 HTML / CSS / JavaScript
 - SQLite 数据库
+- Web Push / VAPID
 - Docker / Docker Compose
 
 ## 本地运行
@@ -61,6 +63,10 @@ cp .env.example .env
 ```env
 LEDGER_TOKEN=change-this-token
 BASE_PATH=
+TZ=Asia/Shanghai
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:admin@example.com
 ```
 
 启动：
@@ -165,6 +171,45 @@ docker compose exec money-ledger printenv BASE_PATH
 
 前端遇到 `401` 会提示输入令牌，并保存到浏览器 `localStorage`。公网部署建议设置 `LEDGER_TOKEN`。
 
+## 推送通知
+
+推送通知使用标准 Web Push，不依赖第三方推送平台。服务器需要配置一组 VAPID 密钥。
+
+生成密钥：
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+将输出写入 `.env`：
+
+```env
+TZ=Asia/Shanghai
+VAPID_PUBLIC_KEY=你的_publicKey
+VAPID_PRIVATE_KEY=你的_privateKey
+VAPID_SUBJECT=mailto:你的邮箱@example.com
+```
+
+然后重建容器：
+
+```bash
+docker compose up -d --build --force-recreate
+```
+
+启用方式：
+
+- 打开应用的“设置 > 通知与提醒”。
+- 点击“开启通知”，授权后可以发送测试通知。
+- 预算预警会在总预算或分类预算达到 80%、90%、100% 时推送，并按月份、分类和阈值去重。
+- 每日记账提醒会在设定时间后检查当天是否没有记录，没有记录才提醒一次。
+
+iOS 注意事项：
+
+- 需要 iOS/iPadOS 16.4 或更高版本。
+- 必须通过 HTTPS 访问。
+- 必须先在 Safari 中“添加到主屏幕”，再从主屏幕打开应用并点击开启通知。
+- 浏览器普通标签页里不会开启 iOS Web Push。
+
 ## 数据与备份
 
 主要数据文件：
@@ -197,6 +242,12 @@ GET    /api/export.json
 POST   /api/import.json
 GET    /api/summary?format=text
 POST   /api/clear
+GET    /api/notifications/status
+PUT    /api/notifications/preferences
+GET    /api/push/public-key
+POST   /api/push/subscribe
+POST   /api/push/unsubscribe
+POST   /api/push/test
 ```
 
 新增记账示例：

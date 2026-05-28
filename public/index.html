@@ -106,7 +106,7 @@
         }
       }
     </style>
-    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=32">
+    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=33">
   </head>
   <body>
     <div id="startupScreen" class="startup-screen" role="status" aria-live="polite">
@@ -432,6 +432,51 @@
 
             <details class="settings-group">
               <summary>
+                <span class="settings-group-icon" aria-hidden="true">🔔</span>
+                <span>
+                  <strong>通知与提醒</strong>
+                  <small>预算预警、每日记账提醒和测试推送</small>
+                </span>
+              </summary>
+              <div class="settings-group-body">
+                <div id="notificationNotice" class="notification-notice" hidden></div>
+                <div class="notification-status">
+                  <div>
+                    <strong id="notificationStatusTitle">未开启</strong>
+                    <small id="notificationStatusText">开启后可接收预算和记账提醒</small>
+                  </div>
+                  <button id="enablePushButton" class="primary-button" type="button">开启通知</button>
+                </div>
+                <div class="notification-options">
+                  <label class="toggle-row">
+                    <span>
+                      <strong>预算预警</strong>
+                      <small>达到 80%、90%、100% 时提醒</small>
+                    </span>
+                    <input id="budgetPushToggle" type="checkbox" checked>
+                  </label>
+                  <label class="toggle-row">
+                    <span>
+                      <strong>每日记账提醒</strong>
+                      <small>当天没有记录时提醒一次</small>
+                    </span>
+                    <input id="dailyReminderToggle" type="checkbox">
+                  </label>
+                  <label class="notification-time-row">
+                    <span>提醒时间</span>
+                    <input id="dailyReminderTimeInput" type="time" value="21:30">
+                  </label>
+                </div>
+                <div class="notification-actions">
+                  <button id="saveNotificationSettingsButton" class="ghost-button" type="button">保存提醒设置</button>
+                  <button id="testPushButton" class="ghost-button" type="button">发送测试通知</button>
+                  <button id="disablePushButton" class="ghost-button" type="button">关闭通知</button>
+                </div>
+              </div>
+            </details>
+
+            <details class="settings-group">
+              <summary>
                 <span class="settings-group-icon" aria-hidden="true">👥</span>
                 <span>
                   <strong>成员</strong>
@@ -614,6 +659,6 @@
         }, true);
       })();
     </script>
-    <script src="__BASE_PATH__/app.js?v=32" defer></script>
+    <script src="__BASE_PATH__/app.js?v=33" defer></script>
   </body>
 </html>

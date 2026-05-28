@@ -7,6 +7,7 @@ const state = {
   detailFilters: { query: "", categoryId: "", member: "" },
   entryTemplates: [],
   trendStates: [],
+  notificationStatus: null,
   theme: normalizeTheme(localStorage.getItem("ledgerTheme")),
   token: localStorage.getItem("ledgerToken") || ""
 };
@@ -74,6 +75,16 @@ const elements = {
   addMemberButton: document.querySelector("#addMemberButton"),
   budgetRows: document.querySelector("#budgetRows"),
   addCategoryButton: document.querySelector("#addCategoryButton"),
+  notificationNotice: document.querySelector("#notificationNotice"),
+  notificationStatusTitle: document.querySelector("#notificationStatusTitle"),
+  notificationStatusText: document.querySelector("#notificationStatusText"),
+  enablePushButton: document.querySelector("#enablePushButton"),
+  budgetPushToggle: document.querySelector("#budgetPushToggle"),
+  dailyReminderToggle: document.querySelector("#dailyReminderToggle"),
+  dailyReminderTimeInput: document.querySelector("#dailyReminderTimeInput"),
+  saveNotificationSettingsButton: document.querySelector("#saveNotificationSettingsButton"),
+  testPushButton: document.querySelector("#testPushButton"),
+  disablePushButton: document.querySelector("#disablePushButton"),
   jsonExportLink: document.querySelector("#jsonExportLink"),
   importBackupInput: document.querySelector("#importBackupInput"),
   clearAllDataButton: document.querySelector("#clearAllDataButton"),
@@ -814,6 +825,10 @@ function apiHeaders() {
 const API_ERROR_MESSAGES = {
   not_found: "服务接口未找到，请重启应用后再试",
   expense_not_found: "没有找到这条记录，请返回明细后刷新再试",
+  push_not_configured: "服务器还没有配置推送密钥",
+  push_subscription_missing: "当前没有可用的推送订阅，请先开启通知",
+  push_send_failed: "推送发送失败，请检查服务器网络和 VAPID 配置",
+  invalid_push_subscription: "通知订阅信息无效，请重新开启通知",
   invalid_date: "日期不正确",
   invalid_amount: "金额不正确",
   invalid_category: "分类不存在，请检查分类设置",
@@ -827,6 +842,29 @@ const API_ERROR_MESSAGES = {
 function apiErrorMessage(payload, response) {
   const code = payload?.error || "";
   return API_ERROR_MESSAGES[code] || code || response.statusText || "请求失败";
+}
+
+function urlBase64ToUint8Array(value) {
+  const padding = "=".repeat((4 - value.length % 4) % 4);
+  const base64 = `${value}${padding}`.replace(/-/g, "+").replace(/_/g, "/");
+  const raw = window.atob(base64);
+  const output = new Uint8Array(raw.length);
+  for (let index = 0; index < raw.length; index += 1) {
+    output[index] = raw.charCodeAt(index);
+  }
+  return output;
+}
+
+function notificationSupport() {
+  const standalone = window.matchMedia?.("(display-mode: standalone)")?.matches || window.navigator.standalone === true;
+  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+    return { supported: false, standalone, message: "当前浏览器不支持网页推送" };
+  }
+  if (isIos && !standalone) {
+    return { supported: false, standalone, message: "iOS 需要先添加到主屏幕后再开启推送" };
+  }
+  return { supported: true, standalone, message: "" };
 }
 
 async function api(path, options = {}) {
@@ -1648,6 +1686,144 @@ function renderSettings() {
     `;
     elements.budgetRows.appendChild(row);
   });
+  renderNotificationSettings();
+}
+
+function renderNotificationSettings() {
+  if (!elements.notificationStatusTitle) return;
+
+  const support = notificationSupport();
+  const status = state.notificationStatus;
+  const preferences = status?.preferences || {
+    pushEnabled: false,
+    budgetAlertsEnabled: true,
+    dailyReminderEnabled: false,
+    dailyReminderTime: "21:30"
+  };
+  const permission = "Notification" in window ? Notification.permission : "default";
+  const isEnabled = Boolean(preferences.pushEnabled && permission === "granted" && status?.subscriptionCount > 0);
+
+  const noticeText = !support.supported
+    ? support.message
+    : status?.configured === false
+      ? "服务器还没有配置 VAPID 推送密钥"
+      : "";
+  elements.notificationNotice.hidden = !noticeText;
+  elements.notificationNotice.textContent = noticeText;
+
+  elements.notificationStatusTitle.textContent = isEnabled ? "通知已开启" : "通知未开启";
+  elements.notificationStatusText.textContent = isEnabled
+    ? `已绑定 ${status.subscriptionCount} 台设备`
+    : permission === "denied"
+      ? "系统已拒绝通知权限，需要在浏览器或系统设置中重新允许"
+      : "开启后可接收预算和每日记账提醒";
+
+  elements.budgetPushToggle.checked = Boolean(preferences.budgetAlertsEnabled);
+  elements.dailyReminderToggle.checked = Boolean(preferences.dailyReminderEnabled);
+  elements.dailyReminderTimeInput.value = preferences.dailyReminderTime || "21:30";
+
+  const canUsePush = support.supported && Boolean(status?.configured) && permission !== "denied";
+  elements.enablePushButton.disabled = !canUsePush || isEnabled;
+  elements.testPushButton.disabled = !isEnabled;
+  elements.disablePushButton.disabled = !isEnabled;
+  elements.saveNotificationSettingsButton.disabled = !Boolean(status?.configured);
+}
+
+async function refreshNotificationStatus() {
+  if (!elements.notificationStatusTitle) return;
+  try {
+    state.notificationStatus = await api("/api/notifications/status");
+    renderNotificationSettings();
+  } catch {
+    renderNotificationSettings();
+  }
+}
+
+async function serviceWorkerReady() {
+  const registration = await navigator.serviceWorker.ready;
+  return registration;
+}
+
+async function subscribePushNotifications() {
+  elements.notificationStatusText.textContent = "正在开启通知...";
+
+  const support = notificationSupport();
+  if (!support.supported) throw new Error(support.message);
+  if (state.notificationStatus?.configured === false) {
+    throw new Error("服务器还没有配置推送密钥");
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") {
+    throw new Error("没有获得通知权限");
+  }
+
+  const keyInfo = await api("/api/push/public-key");
+  if (!keyInfo.configured || !keyInfo.publicKey) {
+    throw new Error("服务器还没有配置推送密钥");
+  }
+
+  const registration = await serviceWorkerReady();
+  let subscription = await registration.pushManager.getSubscription();
+  if (!subscription) {
+    subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(keyInfo.publicKey)
+    });
+  }
+
+  state.notificationStatus = await api("/api/push/subscribe", {
+    method: "POST",
+    body: JSON.stringify({ subscription })
+  });
+  renderNotificationSettings();
+  showSuccessPopup("通知已开启");
+}
+
+async function disablePushNotifications() {
+  elements.notificationStatusText.textContent = "正在关闭通知...";
+  let endpoint = "";
+
+  if ("serviceWorker" in navigator) {
+    const registration = await serviceWorkerReady().catch(() => null);
+    const subscription = await registration?.pushManager.getSubscription();
+    endpoint = subscription?.endpoint || "";
+    if (subscription) await subscription.unsubscribe();
+  }
+
+  state.notificationStatus = await api("/api/push/unsubscribe", {
+    method: "POST",
+    body: JSON.stringify({ endpoint })
+  });
+  renderNotificationSettings();
+  showSuccessPopup("通知已关闭");
+}
+
+function collectNotificationPreferences(pushEnabled = state.notificationStatus?.preferences?.pushEnabled) {
+  return {
+    pushEnabled: Boolean(pushEnabled),
+    budgetAlertsEnabled: elements.budgetPushToggle.checked,
+    dailyReminderEnabled: elements.dailyReminderToggle.checked,
+    dailyReminderTime: elements.dailyReminderTimeInput.value || "21:30"
+  };
+}
+
+async function saveNotificationSettings() {
+  elements.notificationStatusText.textContent = "正在保存提醒设置...";
+  state.notificationStatus = await api("/api/notifications/preferences", {
+    method: "PUT",
+    body: JSON.stringify(collectNotificationPreferences())
+  });
+  renderNotificationSettings();
+  showSuccessPopup("提醒设置已保存");
+}
+
+async function sendTestPushNotification() {
+  elements.notificationStatusText.textContent = "正在发送测试通知...";
+  const result = await api("/api/push/test", { method: "POST", body: "{}" });
+  if (result.status) state.notificationStatus = result.status;
+  renderNotificationSettings();
+  showSuccessPopup(result.sent > 0 ? "测试通知已发送" : "没有可用设备");
 }
 
 function render() {
@@ -2224,6 +2400,30 @@ function bindEvents() {
   elements.addMemberButton.addEventListener("click", addMemberRow);
   elements.memberRows.addEventListener("click", handleMemberRowsClick);
   elements.addCategoryButton.addEventListener("click", addCategoryRow);
+  elements.enablePushButton?.addEventListener("click", () => {
+    subscribePushNotifications().catch(error => {
+      elements.notificationStatusText.textContent = error.message;
+      renderNotificationSettings();
+    });
+  });
+  elements.disablePushButton?.addEventListener("click", () => {
+    disablePushNotifications().catch(error => {
+      elements.notificationStatusText.textContent = error.message;
+      renderNotificationSettings();
+    });
+  });
+  elements.saveNotificationSettingsButton?.addEventListener("click", () => {
+    saveNotificationSettings().catch(error => {
+      elements.notificationStatusText.textContent = error.message;
+      renderNotificationSettings();
+    });
+  });
+  elements.testPushButton?.addEventListener("click", () => {
+    sendTestPushNotification().catch(error => {
+      elements.notificationStatusText.textContent = error.message;
+      renderNotificationSettings();
+    });
+  });
   elements.importBackupInput.addEventListener("change", importBackup);
   elements.clearAllDataButton.addEventListener("click", clearAllData);
   elements.calendarGrid.addEventListener("click", handleCalendarClick);
@@ -2255,6 +2455,7 @@ function init() {
     .then(() => {
       dismissStartupScreen();
       syncOfflineQueue({ silent: true });
+      refreshNotificationStatus();
     })
     .catch(error => {
       document.body.innerHTML = `<main class="app-shell"><div class="empty-state">${escapeHtml(error.message)}</div></main>`;

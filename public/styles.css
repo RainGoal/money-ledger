@@ -1047,6 +1047,131 @@ html[data-theme="cute"] .category-meter {
   margin: -2px 0 0;
 }
 
+.notification-notice {
+  padding: 11px 12px;
+  border-radius: 16px;
+  background: var(--yellow-soft);
+  color: var(--yellow);
+  font-size: 0.8rem;
+  font-weight: 850;
+  line-height: 1.45;
+}
+
+.notification-notice[hidden] {
+  display: none;
+}
+
+.notification-status {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--soft);
+}
+
+.notification-status strong,
+.toggle-row strong {
+  display: block;
+  font-size: 0.92rem;
+  font-weight: 950;
+}
+
+.notification-status small,
+.toggle-row small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 750;
+  line-height: 1.4;
+}
+
+.notification-status .primary-button {
+  width: auto;
+  min-height: 38px;
+  padding: 0 14px;
+}
+
+.notification-options {
+  display: grid;
+  gap: 10px;
+}
+
+.toggle-row,
+.notification-time-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 58px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+}
+
+.toggle-row input {
+  width: 46px;
+  height: 28px;
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 24%, transparent);
+  padding: 3px;
+  transition: background 160ms ease;
+}
+
+.toggle-row input::before {
+  content: "";
+  display: block;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+  transition: transform 160ms ease;
+}
+
+.toggle-row input:checked {
+  background: var(--accent);
+}
+
+.toggle-row input:checked::before {
+  transform: translateX(18px);
+}
+
+.notification-time-row span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.notification-time-row input {
+  width: 122px;
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--soft);
+  color: var(--text);
+  padding: 7px 12px;
+  outline: none;
+}
+
+.notification-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.notification-actions .ghost-button:disabled,
+.notification-status .primary-button:disabled {
+  opacity: 0.46;
+  cursor: not-allowed;
+}
+
 .danger-group .settings-group-icon {
   background: var(--red-soft);
   color: var(--red);
@@ -2792,6 +2917,8 @@ html[data-theme="ios26"] .tabbar .tab--primary .tab-icon svg {
   .segmented,
   .filter-row,
   .backup-actions,
+  .notification-status,
+  .notification-actions,
   .record-actions,
   .member-settings-row,
   .budget-row {
