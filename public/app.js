@@ -48,6 +48,8 @@ const elements = {
   noteInput: document.querySelector("#noteInput"),
   saveTemplateButton: document.querySelector("#saveTemplateButton"),
   templateList: document.querySelector("#templateList"),
+  entrySubmitAmount: document.querySelector("#entrySubmitAmount"),
+  entrySubmitMeta: document.querySelector("#entrySubmitMeta"),
   entryFeedback: document.querySelector("#entryFeedback"),
   offlineQueueStatus: document.querySelectorAll("[data-offline-queue-status]"),
   recentList: document.querySelector("#recentList"),
@@ -1452,6 +1454,30 @@ function renderEntryControls() {
     });
     elements.memberChips.appendChild(button);
   });
+
+  renderEntrySubmitBar();
+}
+
+function renderEntrySubmitBar() {
+  if (!elements.entrySubmitAmount || !elements.entrySubmitMeta || !state.data) return;
+  const rawAmount = Number(String(elements.amountInput.value).replace(",", "."));
+  const amount = roundMoney(rawAmount);
+  const category = state.data.categories.find(item => item.id === state.selectedCategoryId);
+  const member = state.selectedMember || "未选成员";
+  const dateLabel = formatEntryDateLabel(elements.dateInput.value);
+
+  elements.entrySubmitAmount.textContent = Number.isFinite(amount) && amount > 0
+    ? `¥${money(amount)}`
+    : "待填写金额";
+  elements.entrySubmitMeta.textContent = `${category ? `${categoryIcon(category)} ${category.name}` : "未选分类"} · ${member} · ${dateLabel}`;
+}
+
+function formatEntryDateLabel(dateValue) {
+  if (!dateValue) return "未选日期";
+  if (dateValue === today().date) return "今天";
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
+  if (!match) return dateValue;
+  return `${Number(match[2])}月${Number(match[3])}日`;
 }
 
 function renderEntryTemplates() {
@@ -2758,6 +2784,8 @@ function bindEvents() {
   document.addEventListener("keydown", handleCropKeyDown);
   elements.monthInput.addEventListener("change", loadState);
   elements.expenseForm.addEventListener("submit", submitExpense);
+  elements.amountInput.addEventListener("input", renderEntrySubmitBar);
+  elements.dateInput.addEventListener("change", renderEntrySubmitBar);
   elements.saveTemplateButton.addEventListener("click", saveCurrentTemplate);
   elements.templateList.addEventListener("click", handleTemplateClick);
   elements.detailSearchInput.addEventListener("input", handleDetailFilterChange);

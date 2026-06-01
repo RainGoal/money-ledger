@@ -106,7 +106,7 @@
         }
       }
     </style>
-    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=34">
+    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=35">
   </head>
   <body>
     <div id="startupScreen" class="startup-screen" role="status" aria-live="polite">
@@ -220,9 +220,15 @@
               </label>
             </div>
 
-            <button class="primary-button" type="submit">提交</button>
-            <p id="entryFeedback" class="feedback" role="status"></p>
             <p id="offlineQueueStatus" class="offline-queue-status" data-offline-queue-status role="status" hidden></p>
+            <div class="entry-submit-bar" aria-label="提交记账">
+              <div class="entry-submit-summary">
+                <strong id="entrySubmitAmount">待填写金额</strong>
+                <span id="entrySubmitMeta">选择分类和成员</span>
+                <p id="entryFeedback" class="feedback entry-submit-feedback" role="status"></p>
+              </div>
+              <button class="primary-button entry-submit-button" type="submit">记一笔</button>
+            </div>
           </form>
         </section>
 
@@ -660,6 +666,6 @@
         }, true);
       })();
     </script>
-    <script src="__BASE_PATH__/app.js?v=34" defer></script>
+    <script src="__BASE_PATH__/app.js?v=35" defer></script>
   </body>
 </html>
