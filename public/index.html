@@ -106,7 +106,7 @@
         }
       }
     </style>
-    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=35">
+    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=37">
   </head>
   <body>
     <div id="startupScreen" class="startup-screen" role="status" aria-live="polite">
@@ -188,7 +188,28 @@
               <input id="amountInput" inputmode="decimal" autocomplete="off" placeholder="0.00" required>
             </label>
 
-            <div class="template-panel">
+            <div class="field-group">
+              <span class="field-label">分类</span>
+              <div id="categoryChips" class="chip-grid"></div>
+            </div>
+
+            <div class="entry-secondary-row">
+              <div class="field-group entry-member-field">
+                <span class="field-label">成员</span>
+                <div id="memberChips" class="segmented"></div>
+              </div>
+              <label class="entry-date-field">
+                <span>日期</span>
+                <input id="dateInput" type="date" required>
+              </label>
+            </div>
+
+            <label class="entry-note-field">
+              <span>备注</span>
+              <input id="noteInput" maxlength="80" placeholder="可选">
+            </label>
+
+            <div class="template-panel entry-template-panel">
               <div class="template-head">
                 <div>
                   <span class="field-label">常用模板</span>
@@ -197,27 +218,6 @@
                 <button id="saveTemplateButton" class="ghost-button" type="button">保存当前</button>
               </div>
               <div id="templateList" class="template-list"></div>
-            </div>
-
-            <div class="field-group">
-              <span class="field-label">分类</span>
-              <div id="categoryChips" class="chip-grid"></div>
-            </div>
-
-            <div class="field-group">
-              <span class="field-label">成员</span>
-              <div id="memberChips" class="segmented"></div>
-            </div>
-
-            <div class="two-column">
-              <label>
-                <span>日期</span>
-                <input id="dateInput" type="date" required>
-              </label>
-              <label>
-                <span>备注</span>
-                <input id="noteInput" maxlength="80" placeholder="可选">
-              </label>
             </div>
 
             <p id="offlineQueueStatus" class="offline-queue-status" data-offline-queue-status role="status" hidden></p>
@@ -666,6 +666,6 @@
         }, true);
       })();
     </script>
-    <script src="__BASE_PATH__/app.js?v=35" defer></script>
+    <script src="__BASE_PATH__/app.js?v=37" defer></script>
   </body>
 </html>
