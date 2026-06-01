@@ -1683,16 +1683,30 @@ label {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(122px, 0.42fr);
   gap: 10px;
-  align-items: end;
+  align-items: start;
   min-width: 0;
 }
 
 .entry-member-field {
   min-width: 0;
+  margin-top: 0;
+}
+
+.entry-member-field .segmented {
+  grid-template-columns: repeat(auto-fit, minmax(52px, 1fr));
+  gap: 8px;
+}
+
+.entry-member-field .member-chip {
+  min-width: 0;
+  padding-inline: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .entry-date-field {
-  gap: 6px;
+  gap: 8px;
 }
 
 .entry-date-field span {
@@ -1700,7 +1714,7 @@ label {
 }
 
 .entry-date-field input {
-  min-height: 38px;
+  min-height: 42px;
   padding: 8px 10px;
   background: color-mix(in srgb, var(--soft) 78%, transparent);
   color: var(--muted);
