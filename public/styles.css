@@ -1775,7 +1775,7 @@ label {
 
 .chip-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
   gap: 9px;
 }
 
@@ -1791,6 +1791,18 @@ label {
   background: var(--soft);
   color: var(--text);
   font-weight: 850;
+}
+
+.chip {
+  min-width: 0;
+  padding-inline: 10px;
+  white-space: nowrap;
+}
+
+.chip > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .chip .category-icon {
