@@ -106,7 +106,7 @@
         }
       }
     </style>
-    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=39">
+    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=40">
   </head>
   <body>
     <div id="startupScreen" class="startup-screen" role="status" aria-live="polite">
@@ -129,56 +129,80 @@
 
       <main>
         <section id="dashboardView" class="view is-active" aria-label="预算看板">
-          <div class="feed-author">
-            <div class="avatar-pair" aria-hidden="true">
-              <span>我</span>
-              <span>Ta</span>
+          <div id="dashboardMain">
+            <div class="feed-author">
+              <div class="avatar-pair" aria-hidden="true">
+                <span>我</span>
+                <span>Ta</span>
+              </div>
+              <div class="author-meta">
+                <strong>我们的本月预算</strong>
+                <span>按分类控制开支</span>
+              </div>
+              <button id="copySummaryButton" class="follow-button" type="button">摘要</button>
             </div>
-            <div class="author-meta">
-              <strong>我们的本月预算</strong>
-              <span>按分类控制开支</span>
-            </div>
-            <button id="copySummaryButton" class="follow-button" type="button">摘要</button>
-          </div>
 
-          <div class="summary-panel">
-            <div class="summary-main">
-              <span class="summary-label">本月已花</span>
-              <strong id="totalSpent">0.00</strong>
-              <span id="totalBudget">/ 0.00</span>
-            </div>
-            <div class="meter" aria-hidden="true"><span id="totalMeter"></span></div>
-            <div class="metric-grid">
-              <article>
-                <span>剩余额度</span>
-                <strong id="remainingAmount">0.00</strong>
-              </article>
-              <article>
-                <span>日均可花</span>
-                <strong id="dailyAmount">0.00</strong>
-              </article>
-              <article>
-                <span>剩余天数</span>
-                <strong id="remainingDays">0</strong>
-              </article>
-            </div>
-          </div>
-
-          <section id="budgetAlertPanel" class="budget-alert-panel" aria-label="预算预警" hidden>
-            <div class="budget-alert-head">
-              <span class="budget-alert-icon" aria-hidden="true">!</span>
-              <div>
-                <strong id="budgetAlertTitle">预算预警</strong>
-                <small id="budgetAlertSummary"></small>
+            <div class="summary-panel">
+              <div class="summary-main">
+                <span class="summary-label">本月已花</span>
+                <strong id="totalSpent">0.00</strong>
+                <span id="totalBudget">/ 0.00</span>
+              </div>
+              <div class="meter" aria-hidden="true"><span id="totalMeter"></span></div>
+              <div class="metric-grid">
+                <article>
+                  <span>剩余额度</span>
+                  <strong id="remainingAmount">0.00</strong>
+                </article>
+                <article>
+                  <span>日均可花</span>
+                  <strong id="dailyAmount">0.00</strong>
+                </article>
+                <article>
+                  <span>剩余天数</span>
+                  <strong id="remainingDays">0</strong>
+                </article>
               </div>
             </div>
-            <div id="budgetAlertList" class="budget-alert-list"></div>
-          </section>
 
-          <div class="section-heading">
-            <h2>分类进度</h2>
+            <section id="budgetAlertPanel" class="budget-alert-panel" aria-label="预算预警" hidden>
+              <div class="budget-alert-head">
+                <span class="budget-alert-icon" aria-hidden="true">!</span>
+                <div>
+                  <strong id="budgetAlertTitle">预算预警</strong>
+                  <small id="budgetAlertSummary"></small>
+                </div>
+              </div>
+              <div id="budgetAlertList" class="budget-alert-list"></div>
+            </section>
+
+            <div class="section-heading">
+              <h2>分类进度</h2>
+            </div>
+            <div id="categoryList" class="category-list"></div>
           </div>
-          <div id="categoryList" class="category-list"></div>
+
+          <div id="categoryDetailPane" class="category-detail-pane" hidden>
+            <div class="category-detail-head">
+              <button id="categoryDetailBack" class="ghost-button" type="button">返回</button>
+              <div>
+                <p class="eyebrow">Category Detail</p>
+                <h2 id="categoryDetailTitle">分类详情</h2>
+                <span id="categoryDetailSummary" class="category-detail-summary"></span>
+              </div>
+            </div>
+            <section id="categoryDetailBudget" class="category-detail-budget"></section>
+            <div class="section-heading category-detail-section-heading">
+              <h2>成员花销</h2>
+              <span id="categoryDetailMemberSummary" class="panel-hint"></span>
+            </div>
+            <div id="categoryDetailMemberList" class="category-detail-member-list"></div>
+            <div class="section-heading category-detail-section-heading">
+              <h2>分类明细</h2>
+              <span id="categoryDetailExpenseSummary" class="panel-hint"></span>
+            </div>
+            <div id="categoryDetailExpenseList" class="category-detail-expense-list"></div>
+          </div>
         </section>
 
         <section id="entryView" class="view" aria-label="快速记账">
@@ -666,6 +690,6 @@
         }, true);
       })();
     </script>
-    <script src="__BASE_PATH__/app.js?v=39" defer></script>
+    <script src="__BASE_PATH__/app.js?v=40" defer></script>
   </body>
 </html>

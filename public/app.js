@@ -4,6 +4,7 @@ const state = {
   selectedMember: null,
   selectedStatsDate: null,
   selectedExpenseId: null,
+  selectedDashboardCategoryId: null,
   detailFilters: { query: "", categoryId: "", member: "" },
   entryTemplates: [],
   trendStates: [],
@@ -39,7 +40,17 @@ const elements = {
   budgetAlertTitle: document.querySelector("#budgetAlertTitle"),
   budgetAlertSummary: document.querySelector("#budgetAlertSummary"),
   budgetAlertList: document.querySelector("#budgetAlertList"),
+  dashboardMain: document.querySelector("#dashboardMain"),
   categoryList: document.querySelector("#categoryList"),
+  categoryDetailPane: document.querySelector("#categoryDetailPane"),
+  categoryDetailBack: document.querySelector("#categoryDetailBack"),
+  categoryDetailTitle: document.querySelector("#categoryDetailTitle"),
+  categoryDetailSummary: document.querySelector("#categoryDetailSummary"),
+  categoryDetailBudget: document.querySelector("#categoryDetailBudget"),
+  categoryDetailMemberSummary: document.querySelector("#categoryDetailMemberSummary"),
+  categoryDetailMemberList: document.querySelector("#categoryDetailMemberList"),
+  categoryDetailExpenseSummary: document.querySelector("#categoryDetailExpenseSummary"),
+  categoryDetailExpenseList: document.querySelector("#categoryDetailExpenseList"),
   categoryChips: document.querySelector("#categoryChips"),
   memberChips: document.querySelector("#memberChips"),
   expenseForm: document.querySelector("#expenseForm"),
@@ -1398,6 +1409,10 @@ function renderCategories() {
     const icon = categoryIcon(category, index);
     const card = document.createElement("article");
     card.className = "category-card";
+    card.dataset.categoryId = category.id;
+    card.tabIndex = 0;
+    card.setAttribute("role", "button");
+    card.setAttribute("aria-label", `查看${category.name}分类详情`);
     card.style.setProperty("--accent", category.color);
     card.innerHTML = `
       <div class="category-top">
@@ -1414,7 +1429,173 @@ function renderCategories() {
         <small>${category.percent}%</small>
       </div>
     `;
+    card.addEventListener("click", () => openDashboardCategory(category.id));
+    card.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openDashboardCategory(category.id);
+      }
+    });
     elements.categoryList.appendChild(card);
+  });
+}
+
+function openDashboardCategory(categoryId) {
+  state.selectedDashboardCategoryId = categoryId;
+  renderDashboardCategoryDetail();
+  document.querySelector(".app-shell")?.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function closeDashboardCategory() {
+  state.selectedDashboardCategoryId = null;
+  renderDashboardCategoryDetail();
+}
+
+function dashboardCategoryExpenses(categoryId) {
+  return state.data.expenses
+    .filter(expense => expense.categoryId === categoryId)
+    .slice()
+    .sort((left, right) => {
+      if (left.date !== right.date) return right.date.localeCompare(left.date);
+      return String(right.createdAt || "").localeCompare(String(left.createdAt || ""));
+    });
+}
+
+function renderDashboardCategoryDetail() {
+  if (!elements.categoryDetailPane || !elements.dashboardMain) return;
+
+  const category = state.data.categories.find(item => item.id === state.selectedDashboardCategoryId);
+  elements.dashboardMain.hidden = Boolean(category);
+  elements.categoryDetailPane.hidden = !category;
+
+  if (!category) {
+    state.selectedDashboardCategoryId = null;
+    return;
+  }
+
+  const expenses = dashboardCategoryExpenses(category.id);
+  const total = roundMoney(expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0));
+  const percent = category.limit > 0 ? Math.min(999, Math.round((total / category.limit) * 100)) : 0;
+  const remaining = roundMoney(Number(category.limit || 0) - total);
+  const categoryIndex = state.data.categories.findIndex(item => item.id === category.id);
+  const icon = categoryIcon(category, categoryIndex);
+
+  elements.categoryDetailTitle.textContent = `${icon} ${category.name}`;
+  elements.categoryDetailSummary.textContent = `${state.data.month} · ${expenses.length} 笔`;
+  elements.categoryDetailBudget.innerHTML = `
+    <div class="category-detail-budget-top">
+      <div>
+        <span>本月已花</span>
+        <strong>${money(total)}</strong>
+      </div>
+      <div>
+        <span>预算</span>
+        <strong>${money(category.limit)}</strong>
+      </div>
+      <div>
+        <span>剩余</span>
+        <strong class="${remaining < 0 ? "is-up" : "is-down"}">${money(remaining)}</strong>
+      </div>
+    </div>
+    <div class="category-meter"><span style="width:${Math.min(percent, 100)}%; background:${meterColor(percent)}"></span></div>
+    <div class="category-detail-budget-foot">
+      <small>使用 ${percent}%</small>
+      <small>日均 ${money(category.dailyRemaining)}</small>
+    </div>
+  `;
+
+  renderDashboardCategoryMembers(expenses, total);
+  renderDashboardCategoryExpenses(expenses);
+}
+
+function renderDashboardCategoryMembers(expenses, total) {
+  const memberNames = [
+    ...state.data.members,
+    ...expenses.map(expense => expense.member).filter(member => member && !state.data.members.includes(member))
+  ];
+  const uniqueMembers = Array.from(new Set(memberNames));
+  elements.categoryDetailMemberSummary.textContent = `${uniqueMembers.length} 人`;
+  elements.categoryDetailMemberList.innerHTML = "";
+
+  uniqueMembers.forEach(member => {
+    const memberExpenses = expenses.filter(expense => expense.member === member);
+    const amount = roundMoney(memberExpenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0));
+    const percent = total > 0 ? Math.round((amount / total) * 100) : 0;
+    const row = document.createElement("article");
+    row.className = "category-member-row";
+    row.innerHTML = `
+      <div>
+        <strong>${escapeHtml(member)}</strong>
+        <small>${memberExpenses.length} 笔 · ${percent}%</small>
+      </div>
+      <em>${money(amount)}</em>
+      <div class="category-member-meter" aria-hidden="true"><span style="width:${percent}%"></span></div>
+    `;
+    elements.categoryDetailMemberList.appendChild(row);
+  });
+}
+
+function renderDashboardCategoryExpenses(expenses) {
+  elements.categoryDetailExpenseSummary.textContent = `${expenses.length} 笔`;
+  elements.categoryDetailExpenseList.innerHTML = "";
+
+  const groups = groupExpensesByDate(expenses);
+  if (groups.length === 0) {
+    elements.categoryDetailExpenseList.innerHTML = `<div class="empty-state">这个分类本月还没有记录</div>`;
+    return;
+  }
+
+  groups.forEach(group => {
+    const card = document.createElement("article");
+    card.className = "day-group category-detail-day";
+    card.innerHTML = `
+      <div class="day-group-head">
+        <div>
+          <div class="day-group-title">${escapeHtml(formatDetailDate(group.date))}</div>
+          <div class="day-group-meta">${group.items.length} 笔</div>
+        </div>
+        <div class="day-total">合计 ${money(group.total)}</div>
+      </div>
+    `;
+
+    const list = document.createElement("div");
+    list.className = "day-items";
+    group.items.forEach(expense => {
+      const item = document.createElement("div");
+      const statusLabel = syncStatusLabel(expense.syncStatus);
+      item.className = `day-item day-item-button${statusLabel ? " is-pending-sync" : ""}`;
+      item.tabIndex = 0;
+      item.setAttribute("role", "button");
+      item.setAttribute("aria-label", `查看${expense.member} ${money(expense.amount)}的记录详情`);
+      item.innerHTML = `
+        <div class="day-item-main">
+          <div class="day-item-title">
+            <span class="category-icon" aria-hidden="true">${escapeHtml(expense.categoryIcon || "🧾")}</span>
+            <span>${escapeHtml(expense.member)}</span>
+          </div>
+          <div class="record-note${expense.note ? "" : " is-empty"}">${expense.note ? escapeHtml(expense.note) : "无备注"}</div>
+        </div>
+        <div class="day-item-side">
+          <div class="recent-amount">-${money(expense.amount)}</div>
+          ${statusLabel ? `<span class="sync-status-pill">${escapeHtml(statusLabel)}</span>` : ""}
+          <span class="detail-chevron" aria-hidden="true">›</span>
+        </div>
+      `;
+      item.addEventListener("click", () => {
+        setView("details");
+        openRecordDetail(expense.id);
+      });
+      item.addEventListener("keydown", event => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          setView("details");
+          openRecordDetail(expense.id);
+        }
+      });
+      list.appendChild(item);
+    });
+    card.appendChild(list);
+    elements.categoryDetailExpenseList.appendChild(card);
   });
 }
 
@@ -2111,6 +2292,7 @@ function render() {
   renderSummary();
   renderBudgetWarnings();
   renderCategories();
+  renderDashboardCategoryDetail();
   renderEntryControls();
   renderEntryTemplates();
   renderOfflineQueueStatus();
@@ -2783,6 +2965,7 @@ function bindEvents() {
   window.addEventListener("resize", handleCropResize);
   document.addEventListener("keydown", handleCropKeyDown);
   elements.monthInput.addEventListener("change", loadState);
+  elements.categoryDetailBack.addEventListener("click", closeDashboardCategory);
   elements.expenseForm.addEventListener("submit", submitExpense);
   elements.amountInput.addEventListener("input", renderEntrySubmitBar);
   elements.dateInput.addEventListener("change", renderEntrySubmitBar);

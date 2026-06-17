@@ -1518,6 +1518,8 @@ body.is-cropping .app-shell {
 .entry-panel,
 .settings-panel,
 .record-detail-panel,
+.category-detail-budget,
+.category-member-row,
 .budget-row {
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -1529,6 +1531,137 @@ body.is-cropping .app-shell {
   display: grid;
   gap: 12px;
   padding: 16px;
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.category-card:hover {
+  transform: translateY(-1px);
+}
+
+.category-card:focus-visible {
+  border-color: var(--focus-border);
+  box-shadow: 0 0 0 4px var(--focus-ring), 0 16px 36px rgba(0, 0, 0, 0.04);
+  outline: none;
+}
+
+.category-detail-pane {
+  display: grid;
+  gap: 14px;
+}
+
+.category-detail-pane[hidden] {
+  display: none;
+}
+
+.category-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.category-detail-head .ghost-button {
+  flex: 0 0 auto;
+}
+
+.category-detail-summary {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.category-detail-budget {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.category-detail-budget-top {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.category-detail-budget-top div {
+  min-width: 0;
+}
+
+.category-detail-budget-top span,
+.category-detail-budget-foot small,
+.category-member-row small {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.category-detail-budget-top strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 1rem;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-detail-budget-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.category-detail-section-heading {
+  margin-top: 6px;
+}
+
+.category-detail-member-list,
+.category-detail-expense-list {
+  display: grid;
+  gap: 10px;
+}
+
+.category-member-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 12px;
+  padding: 12px;
+}
+
+.category-member-row strong,
+.category-member-row small {
+  display: block;
+}
+
+.category-member-row strong {
+  font-size: 0.92rem;
+  font-weight: 950;
+}
+
+.category-member-row em {
+  font-style: normal;
+  font-size: 0.9rem;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.category-member-meter {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--soft);
+}
+
+.category-member-meter span {
+  display: block;
+  min-width: 3px;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
 }
 
 html[data-theme="ios26"] .category-card,
@@ -1537,6 +1670,8 @@ html[data-theme="ios26"] .stats-panel,
 html[data-theme="ios26"] .entry-panel,
 html[data-theme="ios26"] .settings-panel,
 html[data-theme="ios26"] .record-detail-panel,
+html[data-theme="ios26"] .category-detail-budget,
+html[data-theme="ios26"] .category-member-row,
 html[data-theme="ios26"] .budget-row,
 html[data-theme="ios26"] .template-panel,
 html[data-theme="ios26"] .entry-submit-bar,
