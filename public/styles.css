@@ -3445,6 +3445,76 @@ html[data-theme="ios26"] .savings-entry-shortcut {
   border: 1px solid var(--line);
 }
 
+.savings-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.savings-metric-grid article {
+  min-width: 0;
+  padding: 13px 12px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+}
+
+.savings-metric-grid span,
+.savings-metric-grid small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.savings-metric-grid strong {
+  display: block;
+  margin: 5px 0 2px;
+  font-size: 1.04rem;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+  word-break: break-word;
+}
+
+.savings-metric-grid article.is-up strong {
+  color: var(--green);
+}
+
+.savings-metric-grid article.is-down strong {
+  color: var(--muted);
+}
+
+.savings-trend-list {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: var(--surface);
+}
+
+.savings-trend-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 74px;
+  gap: 10px;
+  align-items: center;
+}
+
+.savings-trend-row > span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.savings-trend-row strong {
+  font-size: 0.78rem;
+  font-weight: 950;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .savings-member-row {
   display: grid;
   gap: 8px;

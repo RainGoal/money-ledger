@@ -106,7 +106,7 @@
         }
       }
     </style>
-    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=44">
+    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=45">
   </head>
   <body>
     <div id="startupScreen" class="startup-screen" role="status" aria-live="polite">
@@ -388,6 +388,14 @@
             </div>
 
             <p class="offline-queue-status" data-offline-queue-status role="status" hidden></p>
+
+            <div id="savingsMetricGrid" class="savings-metric-grid" aria-label="存钱指标"></div>
+
+            <div class="section-heading">
+              <h2>近 6 个月</h2>
+              <span id="savingsTrendSummary" class="panel-hint">月度存钱</span>
+            </div>
+            <div id="savingsTrendList" class="savings-trend-list"></div>
 
             <div class="section-heading">
               <h2>本月按成员</h2>
@@ -802,6 +810,6 @@
         }, true);
       })();
     </script>
-    <script src="__BASE_PATH__/app.js?v=44" defer></script>
+    <script src="__BASE_PATH__/app.js?v=45" defer></script>
   </body>
 </html>

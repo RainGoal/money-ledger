@@ -134,6 +134,9 @@ const elements = {
   savingsTotalAll: document.querySelector("#savingsTotalAll"),
   savingsMonthDelta: document.querySelector("#savingsMonthDelta"),
   savingEntryShortcutButton: document.querySelector("#savingEntryShortcutButton"),
+  savingsMetricGrid: document.querySelector("#savingsMetricGrid"),
+  savingsTrendSummary: document.querySelector("#savingsTrendSummary"),
+  savingsTrendList: document.querySelector("#savingsTrendList"),
   savingsMemberSummary: document.querySelector("#savingsMemberSummary"),
   savingsMemberList: document.querySelector("#savingsMemberList"),
   savingsList: document.querySelector("#savingsList"),
@@ -2417,6 +2420,58 @@ function renderSavingsSummary() {
   elements.savingsMonthDelta.textContent = monthLabelText;
 }
 
+function renderSavingsMetrics() {
+  if (!elements.savingsMetricGrid || !state.data?.savings) return;
+  const totals = state.data.savings.totals;
+  const previous = state.trendStates[state.trendStates.length - 2];
+  const previousMonth = Number(previous?.savings?.totals?.month || 0);
+  const delta = roundMoney(Number(totals.month || 0) - previousMonth);
+  const dayAverage = state.data.totals.elapsedDays > 0
+    ? roundMoney(Number(totals.month || 0) / state.data.totals.elapsedDays)
+    : 0;
+  const deltaLabel = previous
+    ? `${delta > 0 ? "+" : delta < 0 ? "-" : ""}${money(Math.abs(delta))}`
+    : "-";
+
+  const cards = [
+    { label: "本月笔数", value: String(totals.monthCount || 0), hint: "已记录" },
+    { label: "日均存入", value: money(dayAverage), hint: `${state.data.totals.elapsedDays || 0} 天` },
+    { label: "较上月", value: deltaLabel, hint: previous ? monthLabel(previous.month) : "暂无数据", tone: delta > 0 ? "up" : delta < 0 ? "down" : "" }
+  ];
+
+  elements.savingsMetricGrid.innerHTML = cards.map(card => `
+    <article class="${card.tone ? `is-${card.tone}` : ""}">
+      <span>${escapeHtml(card.label)}</span>
+      <strong>${escapeHtml(card.value)}</strong>
+      <small>${escapeHtml(card.hint)}</small>
+    </article>
+  `).join("");
+}
+
+function renderSavingsTrend() {
+  if (!elements.savingsTrendList || !state.data?.savings) return;
+  const states = state.trendStates.length ? state.trendStates : [state.data];
+  const totals = states.map(item => Number(item.savings?.totals?.month || 0));
+  const max = Math.max(...totals, 1);
+  const total = roundMoney(totals.reduce((sum, amount) => sum + amount, 0));
+  const average = states.length > 0 ? roundMoney(total / states.length) : 0;
+  elements.savingsTrendSummary.textContent = `${states.length} 个月 · 月均 ${money(average)}`;
+  elements.savingsTrendList.innerHTML = "";
+
+  states.forEach(item => {
+    const amount = Number(item.savings?.totals?.month || 0);
+    const percent = Math.max(amount > 0 ? 5 : 0, Math.round((amount / max) * 100));
+    const row = document.createElement("div");
+    row.className = "savings-trend-row";
+    row.innerHTML = `
+      <span>${escapeHtml(monthLabel(item.month))}</span>
+      <div class="trend-track"><span style="width:${percent}%"></span></div>
+      <strong>${money(amount)}</strong>
+    `;
+    elements.savingsTrendList.appendChild(row);
+  });
+}
+
 function renderSavingsMembers() {
   if (!elements.savingsMemberList || !state.data?.savings) return;
   const totals = state.data.savings.totals;
@@ -2552,6 +2607,8 @@ function renderSavingsList() {
 function renderSavings() {
   if (!state.data?.savings) return;
   renderSavingsSummary();
+  renderSavingsMetrics();
+  renderSavingsTrend();
   renderSavingsMembers();
   renderSavingMemberChips();
   renderSavingSubmitBar();
