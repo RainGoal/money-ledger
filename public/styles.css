@@ -6,6 +6,11 @@
   --muted: #8a8e94;
   --line: #f0f0f0;
   --soft: #f7f7f7;
+  --surface-raised: rgba(255, 255, 255, 0.92);
+  --surface-subtle: #faf8f6;
+  --shadow-soft: 0 18px 44px rgba(86, 60, 44, 0.08);
+  --shadow-card: 0 12px 30px rgba(86, 60, 44, 0.06);
+  --hairline: rgba(54, 40, 32, 0.08);
   --accent: #ff351c;
   --accent-2: #ffb000;
   --green: #2f9d66;
@@ -30,6 +35,11 @@ html[data-theme="cute"] {
   --muted: #8b6876;
   --line: #f0d7e0;
   --soft: #fff3f8;
+  --surface-raised: rgba(255, 253, 253, 0.94);
+  --surface-subtle: #fff6fa;
+  --shadow-soft: 0 18px 42px rgba(174, 72, 112, 0.12);
+  --shadow-card: 0 12px 30px rgba(174, 72, 112, 0.08);
+  --hairline: rgba(151, 68, 102, 0.12);
   --accent: #e84b7b;
   --accent-2: #ff8fb0;
   --green: #48a67f;
@@ -53,6 +63,11 @@ html[data-theme="custom"] {
   --muted: #8b6876;
   --line: #f0d7e0;
   --soft: rgba(255, 243, 248, 0.9);
+  --surface-raised: rgba(255, 255, 255, 0.92);
+  --surface-subtle: rgba(255, 246, 250, 0.92);
+  --shadow-soft: 0 18px 42px rgba(174, 72, 112, 0.12);
+  --shadow-card: 0 12px 30px rgba(174, 72, 112, 0.08);
+  --hairline: rgba(151, 68, 102, 0.12);
   --accent: #e84b7b;
   --accent-2: #ff8fb0;
   --green: #48a67f;
@@ -76,6 +91,11 @@ html[data-theme="ios26"] {
   --muted: #677185;
   --line: rgba(255, 255, 255, 0.62);
   --soft: rgba(255, 255, 255, 0.5);
+  --surface-raised: rgba(255, 255, 255, 0.66);
+  --surface-subtle: rgba(255, 255, 255, 0.42);
+  --shadow-soft: 0 18px 42px rgba(42, 76, 116, 0.13);
+  --shadow-card: 0 12px 30px rgba(42, 76, 116, 0.1);
+  --hairline: rgba(255, 255, 255, 0.6);
   --accent: #0a84ff;
   --accent-2: #64d2ff;
   --green: #30d158;
@@ -116,7 +136,9 @@ body {
   overflow: hidden;
   margin: 0;
   color: var(--text);
-  background: var(--bg);
+  background:
+    radial-gradient(circle at 18% -10%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 34%),
+    linear-gradient(180deg, var(--bg) 0%, color-mix(in srgb, var(--surface-subtle) 74%, var(--bg)) 100%);
   font-family: "Avenir Next", "SF Pro Text", "Helvetica Neue", "Segoe UI", sans-serif;
   letter-spacing: 0;
   overscroll-behavior: none;
@@ -311,7 +333,12 @@ main {
   grid-template-columns: auto 1fr auto;
   gap: 14px;
   align-items: center;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--surface-raised) 88%, transparent);
+  box-shadow: var(--shadow-card);
 }
 
 .avatar-pair {
@@ -332,7 +359,7 @@ main {
   color: #fff;
   font-size: 0.8rem;
   font-weight: 950;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 10px 24px rgba(86, 60, 44, 0.14);
 }
 
 .avatar-pair span:first-child {
@@ -352,13 +379,13 @@ main {
 }
 
 .author-meta strong {
-  font-size: 1.05rem;
+  font-size: 1rem;
   font-weight: 950;
 }
 
 .author-meta span {
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 700;
 }
 
@@ -377,33 +404,44 @@ main {
   font-size: 0.86rem;
   font-weight: 950;
   text-decoration: none;
+  transition: transform 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.follow-button:active,
+.ghost-button:active,
+.ghost-link:active,
+.chip:active,
+.member-chip:active,
+.category-card:active,
+.day-item-button:active {
+  transform: scale(0.98);
 }
 
 .summary-panel {
   position: relative;
   overflow: hidden;
   display: grid;
-  gap: 16px;
-  min-height: 270px;
+  gap: 18px;
+  min-height: 252px;
   padding: 24px;
-  border: 0;
-  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: 30px;
   background:
-    radial-gradient(circle at 78% 22%, rgba(255, 255, 255, 0.48) 0 2px, transparent 3px),
-    repeating-radial-gradient(circle at 82% 18%, rgba(255, 255, 255, 0.22) 0 1px, transparent 1px 12px),
-    linear-gradient(135deg, #ff3b1f 0%, #ff7a22 42%, #ffc134 100%);
+    radial-gradient(circle at 82% 18%, rgba(255, 255, 255, 0.34), transparent 28%),
+    radial-gradient(circle at 16% 86%, rgba(255, 193, 52, 0.28), transparent 30%),
+    linear-gradient(145deg, #d9422b 0%, #ef6c36 48%, #f2a83a 100%);
   color: #fff;
-  box-shadow: 0 24px 44px rgba(255, 72, 28, 0.22);
+  box-shadow: 0 24px 52px rgba(173, 72, 36, 0.24);
 }
 
 .summary-panel::after {
   content: "";
   position: absolute;
-  right: -32px;
-  bottom: -44px;
-  width: 180px;
-  height: 180px;
-  border: 28px solid rgba(255, 255, 255, 0.16);
+  right: -46px;
+  bottom: -52px;
+  width: 190px;
+  height: 190px;
+  border: 30px solid rgba(255, 255, 255, 0.15);
   border-radius: 50%;
   z-index: 0;
   pointer-events: none;
@@ -538,21 +576,21 @@ html[data-theme="cute"] .category-meter {
 .summary-main {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 9px;
   flex-wrap: wrap;
 }
 
 .summary-label {
   width: 100%;
-  color: rgba(255, 255, 255, 0.82);
-  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 0.72rem;
   font-weight: 900;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .summary-main strong {
-  font-size: 3.2rem;
+  font-size: 3.35rem;
   line-height: 1;
   font-weight: 950;
   font-variant-numeric: tabular-nums;
@@ -717,15 +755,16 @@ html[data-theme="cute"] .category-meter {
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 9px;
 }
 
 .metric-grid article {
   min-width: 0;
   padding: 12px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
 .metric-grid span {
@@ -747,7 +786,7 @@ html[data-theme="cute"] .category-meter {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin: 28px 0 12px;
+  margin: 26px 0 12px;
 }
 
 .theme-heading {
@@ -1542,27 +1581,28 @@ body.is-cropping .app-shell {
 .category-detail-budget,
 .category-member-row,
 .budget-row {
-  border: 1px solid var(--line);
+  border: 1px solid var(--hairline);
   border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.04);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
 }
 
 .category-card {
   display: grid;
-  gap: 12px;
-  padding: 16px;
+  gap: 11px;
+  padding: 15px;
   cursor: pointer;
-  transition: transform 160ms ease, box-shadow 160ms ease;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
 }
 
 .category-card:hover {
   transform: translateY(-1px);
+  box-shadow: var(--shadow-soft);
 }
 
 .category-card:focus-visible {
   border-color: var(--focus-border);
-  box-shadow: 0 0 0 4px var(--focus-ring), 0 16px 36px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 0 0 4px var(--focus-ring), var(--shadow-card);
   outline: none;
 }
 
@@ -1759,6 +1799,14 @@ html[data-theme="ios26"] .primary-button {
   font-weight: 950;
 }
 
+.category-name > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.96rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .day-item-title span:last-child {
   min-width: 0;
   overflow: hidden;
@@ -1787,6 +1835,8 @@ html[data-theme="ios26"] .primary-button {
 
 .category-amount,
 .recent-amount {
+  color: color-mix(in srgb, var(--text) 78%, transparent);
+  font-size: 0.82rem;
   font-weight: 950;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -2962,11 +3012,13 @@ html[data-theme="custom"] .calendar-day.has-expense {
   z-index: 30;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 2px;
+  gap: 4px;
   width: min(560px, 100%);
   height: var(--tabbar-height);
-  padding: 10px 12px max(10px, env(safe-area-inset-bottom));
-  background: var(--tabbar-bg);
+  padding: 10px 14px max(10px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--hairline);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 94%, transparent), var(--tabbar-bg));
   box-shadow: var(--tabbar-shadow);
   transform: translateX(-50%);
   -webkit-backdrop-filter: blur(18px);
@@ -2990,18 +3042,23 @@ html[data-theme="custom"] .calendar-day.has-expense {
   z-index: 1;
   display: flex;
   min-width: 0;
-  min-height: 64px;
+  min-height: 62px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
   border: 0;
-  border-radius: 18px;
+  border-radius: 20px;
   background: transparent;
-  color: var(--text);
+  color: color-mix(in srgb, var(--text) 68%, transparent);
   font-size: 0.76rem;
   font-weight: 800;
   line-height: 1;
+  transition: background 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+}
+
+.tabbar .tab:active:not(.tab--primary) {
+  transform: translateY(1px) scale(0.98);
 }
 
 .tab-icon {
@@ -3010,8 +3067,8 @@ html[data-theme="custom"] .calendar-day.has-expense {
 }
 
 .tab-icon svg {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -3095,7 +3152,9 @@ html[data-theme="cute"] .kitty-icon-shell--settings .kitty-icon-badge {
 }
 
 .tabbar .tab.is-active:not(.tab--primary) {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
   color: var(--accent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 64%, transparent);
 }
 
 html[data-theme="cute"] .tabbar .tab.is-active:not(.tab--primary),
@@ -3105,27 +3164,29 @@ html[data-theme="custom"] .tabbar .tab.is-active:not(.tab--primary) {
 
 .tabbar .tab--primary {
   position: absolute;
-  right: 18px;
-  bottom: calc(100% + 12px);
+  right: 20px;
+  bottom: calc(100% + 14px);
   z-index: 3;
-  width: 72px;
-  height: 72px;
-  min-height: 72px;
+  width: 70px;
+  height: 70px;
+  min-height: 70px;
   margin: 0;
   border-radius: 50%;
-  background: linear-gradient(135deg, #ffc400 0%, #ff351c 72%);
+  background:
+    radial-gradient(circle at 30% 18%, rgba(255, 255, 255, 0.72), transparent 28%),
+    linear-gradient(145deg, #f1a13a 0%, #df4c2e 72%);
   color: #fff;
-  box-shadow: 0 16px 34px rgba(255, 53, 28, 0.34);
+  box-shadow: 0 18px 36px rgba(173, 72, 36, 0.3);
   transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease;
 }
 
 .tabbar .tab--primary::after {
   content: "";
   position: absolute;
-  inset: -8px;
+  inset: -9px;
   z-index: -1;
   border-radius: inherit;
-  background: radial-gradient(circle, rgba(255, 53, 28, 0.22), transparent 62%);
+  background: radial-gradient(circle, rgba(223, 76, 46, 0.2), transparent 62%);
   opacity: 0;
   transform: scale(0.72);
   transition: opacity 180ms ease, transform 180ms ease;
@@ -3311,7 +3372,7 @@ html[data-theme="ios26"] .tabbar .tab--primary .tab-icon svg {
 
 @media (max-width: 560px) {
   .app-shell {
-    padding: 34px 20px 194px;
+    padding: 32px 18px 190px;
   }
 
   .topbar {
@@ -3327,12 +3388,12 @@ html[data-theme="ios26"] .tabbar .tab--primary .tab-icon svg {
   }
 
   .summary-panel {
-    min-height: 260px;
-    padding: 22px;
+    min-height: 248px;
+    padding: 22px 20px;
   }
 
   .summary-main strong {
-    font-size: 2.72rem;
+    font-size: 2.82rem;
   }
 
   .metric-grid {
@@ -3427,6 +3488,7 @@ html[data-theme="ios26"] .tabbar .tab--primary .tab-icon svg {
 
   .tabbar {
     width: 100%;
+    padding-inline: 12px;
   }
 }
 
