@@ -106,7 +106,7 @@
         }
       }
     </style>
-    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=43">
+    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=44">
   </head>
   <body>
     <div id="startupScreen" class="startup-screen" role="status" aria-live="polite">
@@ -206,6 +206,11 @@
         </section>
 
         <section id="entryView" class="view" aria-label="快速记账">
+          <div class="entry-mode-switch" role="group" aria-label="记账类型">
+            <button class="entry-mode-option is-active" type="button" data-entry-mode="expense" aria-pressed="true">支出</button>
+            <button class="entry-mode-option" type="button" data-entry-mode="saving" aria-pressed="false">存钱</button>
+          </div>
+
           <form id="expenseForm" class="entry-panel">
             <label class="amount-field">
               <span>金额</span>
@@ -250,6 +255,38 @@
                 <strong id="entrySubmitAmount">待填写金额</strong>
                 <span id="entrySubmitMeta">选择分类和成员</span>
                 <p id="entryFeedback" class="feedback entry-submit-feedback" role="status"></p>
+              </div>
+              <button class="primary-button entry-submit-button" type="submit">记一笔</button>
+            </div>
+          </form>
+
+          <form id="savingForm" class="entry-panel savings-form" hidden>
+            <label class="amount-field">
+              <span>金额</span>
+              <input id="savingAmountInput" inputmode="decimal" autocomplete="off" placeholder="0.00" required>
+            </label>
+
+            <div class="entry-secondary-row">
+              <div class="field-group entry-member-field">
+                <span class="field-label">成员</span>
+                <div id="savingMemberChips" class="segmented"></div>
+              </div>
+              <label class="entry-date-field">
+                <span>日期</span>
+                <input id="savingDateInput" type="date" required>
+              </label>
+            </div>
+
+            <label class="entry-note-field">
+              <span>备注</span>
+              <input id="savingNoteInput" maxlength="80" placeholder="可选">
+            </label>
+
+            <div class="entry-submit-bar" aria-label="提交存钱">
+              <div class="entry-submit-summary">
+                <strong id="savingSubmitAmount">待填写金额</strong>
+                <span id="savingSubmitMeta">选择成员</span>
+                <p id="savingFeedback" class="feedback entry-submit-feedback" role="status"></p>
               </div>
               <button class="primary-button entry-submit-button" type="submit">记一笔</button>
             </div>
@@ -357,38 +394,6 @@
               <span id="savingsMemberSummary" class="panel-hint">本月 0 笔</span>
             </div>
             <div id="savingsMemberList" class="savings-member-list"></div>
-
-            <form id="savingForm" class="entry-panel savings-form">
-              <label class="amount-field">
-                <span>金额</span>
-                <input id="savingAmountInput" inputmode="decimal" autocomplete="off" placeholder="0.00" required>
-              </label>
-
-              <div class="entry-secondary-row">
-                <div class="field-group entry-member-field">
-                  <span class="field-label">成员</span>
-                  <div id="savingMemberChips" class="segmented"></div>
-                </div>
-                <label class="entry-date-field">
-                  <span>日期</span>
-                  <input id="savingDateInput" type="date" required>
-                </label>
-              </div>
-
-              <label class="entry-note-field">
-                <span>备注</span>
-                <input id="savingNoteInput" maxlength="80" placeholder="可选">
-              </label>
-
-              <div class="entry-submit-bar" aria-label="提交存钱">
-                <div class="entry-submit-summary">
-                  <strong id="savingSubmitAmount">待填写金额</strong>
-                  <span id="savingSubmitMeta">选择成员</span>
-                  <p id="savingFeedback" class="feedback entry-submit-feedback" role="status"></p>
-                </div>
-                <button class="primary-button entry-submit-button" type="submit">记一笔</button>
-              </div>
-            </form>
 
             <div class="section-heading">
               <h2>存钱明细</h2>
@@ -797,6 +802,6 @@
         }, true);
       })();
     </script>
-    <script src="__BASE_PATH__/app.js?v=43" defer></script>
+    <script src="__BASE_PATH__/app.js?v=44" defer></script>
   </body>
 </html>

@@ -1,6 +1,6 @@
-const CACHE_NAME = "money-ledger-v43";
+const CACHE_NAME = "money-ledger-v44";
 const BASE_PATH = "__BASE_PATH__";
-const ASSET_VERSION = "43";
+const ASSET_VERSION = "44";
 const ASSETS = [
   `${BASE_PATH}/`,
   `${BASE_PATH}/index.html`,

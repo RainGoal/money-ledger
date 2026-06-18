@@ -9,6 +9,7 @@ const state = {
   savingMember: null,
   detailFilters: { query: "", categoryId: "", member: "" },
   entryTemplates: [],
+  entryMode: "expense",
   trendStates: [],
   notificationStatus: null,
   theme: normalizeTheme(localStorage.getItem("ledgerTheme")),
@@ -23,6 +24,7 @@ const elements = {
   themeColorMeta: document.querySelector("meta[name='theme-color']"),
   monthInput: document.querySelector("#monthInput"),
   tabs: document.querySelectorAll(".tab"),
+  entryModeOptions: document.querySelectorAll("[data-entry-mode]"),
   themeOptions: document.querySelectorAll("[data-theme-choice]"),
   customThemeGrid: document.querySelector("#customThemeGrid"),
   views: {
@@ -306,6 +308,17 @@ function applyTheme(theme) {
   renderThemeControls();
   renderCustomThemeControls();
   applyCustomThemeAssets();
+}
+
+function setEntryMode(mode) {
+  state.entryMode = mode === "saving" ? "saving" : "expense";
+  elements.entryModeOptions.forEach(button => {
+    const isActive = button.dataset.entryMode === state.entryMode;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+  elements.expenseForm.hidden = state.entryMode !== "expense";
+  if (elements.savingForm) elements.savingForm.hidden = state.entryMode !== "saving";
 }
 
 function loadCustomTheme() {
@@ -1228,12 +1241,17 @@ function showSuccessPopup(message) {
   successPopupTimer = window.setTimeout(hideSuccessPopup, 1200);
 }
 
-function setView(view) {
+function setView(view, options = {}) {
+  if (view === "entry") setEntryMode(options.entryMode || "expense");
   document.body.dataset.view = view;
   elements.tabs.forEach(tab => tab.classList.toggle("is-active", tab.dataset.view === view));
   Object.entries(elements.views).forEach(([name, element]) => {
     element.classList.toggle("is-active", name === view);
   });
+}
+
+function openEntryMode(mode) {
+  setView("entry", { entryMode: mode });
 }
 
 function isValidDateValue(value) {
@@ -3636,6 +3654,7 @@ function registerServiceWorker() {
 
 function bindEvents() {
   elements.tabs.forEach(tab => tab.addEventListener("click", () => setView(tab.dataset.view)));
+  elements.entryModeOptions.forEach(button => button.addEventListener("click", () => setEntryMode(button.dataset.entryMode)));
   elements.themeOptions.forEach(button => button.addEventListener("click", () => applyTheme(button.dataset.themeChoice)));
   elements.customThemeGrid.addEventListener("change", handleCustomAssetUpload);
   elements.customThemeGrid.addEventListener("click", handleCustomAssetClear);
@@ -3666,7 +3685,7 @@ function bindEvents() {
   elements.recordDetailForm.addEventListener("submit", saveRecordDetail);
   elements.recordBackButton.addEventListener("click", showRecordList);
   elements.recordDeleteButton.addEventListener("click", deleteSelectedExpense);
-  elements.savingEntryShortcutButton?.addEventListener("click", () => setView("entry"));
+  elements.savingEntryShortcutButton?.addEventListener("click", () => openEntryMode("saving"));
   elements.savingForm?.addEventListener("submit", submitSaving);
   elements.savingAmountInput?.addEventListener("input", renderSavingSubmitBar);
   elements.savingDateInput?.addEventListener("change", renderSavingSubmitBar);
@@ -3727,6 +3746,7 @@ function init() {
   elements.dateInput.value = now.date;
   applyTheme(state.theme);
   setView("dashboard");
+  setEntryMode("expense");
   bindEvents();
   registerServiceWorker();
   loadState()
