@@ -375,9 +375,24 @@ function normalizeQueuedExpensePayload(payload) {
   return { amount, categoryId, member, date, note };
 }
 
+function normalizeQueuedSavingPayload(payload) {
+  if (!payload || typeof payload !== "object") return null;
+  const amount = roundMoney(payload.amount);
+  const member = String(payload.member ?? "").trim();
+  const date = String(payload.date || "").trim();
+  const note = String(payload.note || "").trim().slice(0, 80);
+  if (!Number.isFinite(amount) || amount <= 0 || !isValidDateValue(date)) return null;
+  return { amount, member, date, note };
+}
+
+const OFFLINE_QUEUE_TYPES = new Set([
+  "create", "update", "delete",
+  "saving-create", "saving-update", "saving-delete"
+]);
+
 function normalizeOfflineQueueItem(item) {
   if (!item || typeof item !== "object") return null;
-  const type = ["create", "update", "delete"].includes(item.type) ? item.type : "create";
+  const type = OFFLINE_QUEUE_TYPES.has(item.type) ? item.type : "create";
   const base = {
     id: String(item.id || cryptoId()),
     type,
@@ -395,6 +410,35 @@ function normalizeOfflineQueueItem(item) {
       payload,
       month: String(item.month || payload.date.slice(0, 7))
     };
+  }
+
+  if (type === "saving-create") {
+    const payload = normalizeQueuedSavingPayload(item.payload);
+    if (!payload) return null;
+    return {
+      ...base,
+      localId: String(item.localId || item.savingId || `local_${base.id}`),
+      payload,
+      month: String(item.month || payload.date.slice(0, 7))
+    };
+  }
+
+  if (type === "saving-update") {
+    const savingId = String(item.savingId || "").trim();
+    const payload = normalizeQueuedSavingPayload(item.payload);
+    if (!savingId || !payload) return null;
+    return {
+      ...base,
+      savingId,
+      payload,
+      month: String(item.month || payload.date.slice(0, 7))
+    };
+  }
+
+  if (type === "saving-delete") {
+    const savingId = String(item.savingId || "").trim();
+    if (!savingId) return null;
+    return { ...base, savingId, month: String(item.month || "") };
   }
 
   if (type === "update") {
@@ -504,16 +548,117 @@ function enqueueOfflineDelete(expenseId) {
   renderOfflineQueueStatus();
 }
 
+function queueItemMatchesSaving(item, savingId) {
+  return item.savingId === savingId || item.localId === savingId;
+}
+
+function hasQueuedOperationForSaving(savingId) {
+  return state.offlineQueue.some(item =>
+    (item.type === "saving-create" || item.type === "saving-update" || item.type === "saving-delete") &&
+    queueItemMatchesSaving(item, savingId)
+  );
+}
+
+function enqueueOfflineSavingCreate(payload) {
+  const localId = localExpenseId();
+  state.offlineQueue.push({
+    id: cryptoId(),
+    type: "saving-create",
+    localId,
+    payload,
+    month: payload.date.slice(0, 7),
+    queuedAt: new Date().toISOString(),
+    attempts: 0,
+    lastError: ""
+  });
+  saveOfflineQueue();
+  renderOfflineQueueStatus();
+  return localId;
+}
+
+function enqueueOfflineSavingUpdate(savingId, payload) {
+  const createItem = state.offlineQueue.find(item =>
+    item.type === "saving-create" && queueItemMatchesSaving(item, savingId)
+  );
+  if (createItem) {
+    createItem.payload = payload;
+    createItem.month = payload.date.slice(0, 7);
+    createItem.lastError = "";
+    saveOfflineQueue();
+    renderOfflineQueueStatus();
+    return;
+  }
+
+  const updateItem = state.offlineQueue.find(item =>
+    item.type === "saving-update" && item.savingId === savingId
+  );
+  if (updateItem) {
+    updateItem.payload = payload;
+    updateItem.month = payload.date.slice(0, 7);
+    updateItem.lastError = "";
+  } else {
+    state.offlineQueue.push({
+      id: cryptoId(),
+      type: "saving-update",
+      savingId,
+      payload,
+      month: payload.date.slice(0, 7),
+      queuedAt: new Date().toISOString(),
+      attempts: 0,
+      lastError: ""
+    });
+  }
+  saveOfflineQueue();
+  renderOfflineQueueStatus();
+}
+
+function enqueueOfflineSavingDelete(savingId) {
+  const createItem = state.offlineQueue.find(item =>
+    item.type === "saving-create" && queueItemMatchesSaving(item, savingId)
+  );
+  if (createItem) {
+    state.offlineQueue = state.offlineQueue.filter(item =>
+      !(item.type === "saving-create" && queueItemMatchesSaving(item, savingId))
+    );
+    saveOfflineQueue();
+    renderOfflineQueueStatus();
+    return;
+  }
+
+  state.offlineQueue = state.offlineQueue.filter(item =>
+    !(item.type === "saving-update" && item.savingId === savingId)
+  );
+  if (!state.offlineQueue.some(item => item.type === "saving-delete" && item.savingId === savingId)) {
+    state.offlineQueue.push({
+      id: cryptoId(),
+      type: "saving-delete",
+      savingId,
+      month: state.data?.month || "",
+      queuedAt: new Date().toISOString(),
+      attempts: 0,
+      lastError: ""
+    });
+  }
+  saveOfflineQueue();
+  renderOfflineQueueStatus();
+}
+
 function renderOfflineQueueStatus() {
   if (!elements.offlineQueueStatus?.length) return;
   const count = state.offlineQueue.length;
   const createCount = state.offlineQueue.filter(item => item.type === "create").length;
   const updateCount = state.offlineQueue.filter(item => item.type === "update").length;
   const deleteCount = state.offlineQueue.filter(item => item.type === "delete").length;
+  const savingCreate = state.offlineQueue.filter(item => item.type === "saving-create").length;
+  const savingUpdate = state.offlineQueue.filter(item => item.type === "saving-update").length;
+  const savingDelete = state.offlineQueue.filter(item => item.type === "saving-delete").length;
   const parts = [
-    createCount ? `新增 ${createCount}` : "",
-    updateCount ? `修改 ${updateCount}` : "",
-    deleteCount ? `删除 ${deleteCount}` : ""
+    createCount ? `记账新增 ${createCount}` : "",
+    updateCount ? `记账修改 ${updateCount}` : "",
+    deleteCount ? `记账删除 ${deleteCount}` : "",
+    savingCreate ? `存钱新增 ${savingCreate}` : "",
+    savingUpdate ? `存钱修改 ${savingUpdate}` : "",
+    savingDelete ? `存钱删除 ${savingDelete}` : ""
   ].filter(Boolean).join("，");
   const hidden = count === 0 && !state.syncingOfflineQueue;
   let text = "";
@@ -1151,7 +1296,15 @@ function groupExpensesByDate(expenses) {
 }
 
 function applyOfflineQueueToState(baseState) {
-  if (!baseState || !Array.isArray(baseState.expenses) || state.offlineQueue.length === 0) return baseState;
+  if (!baseState || !Array.isArray(baseState.expenses)) return baseState;
+  if (state.offlineQueue.length === 0) return baseState;
+
+  const expenseQueue = state.offlineQueue.some(item =>
+    item.type === "create" || item.type === "update" || item.type === "delete"
+  );
+  if (!expenseQueue) {
+    return applyOfflineSavingsToState(baseState);
+  }
 
   const categoryMap = new Map(baseState.categories.map((category, index) => [
     category.id,
@@ -1201,7 +1354,92 @@ function applyOfflineQueueToState(baseState) {
   const expenses = Array.from(byId.values())
     .map(expense => enrichExpense(expense, categoryMap))
     .sort(sortExpenses);
-  return rebuildStateFromExpenses(baseState, expenses);
+  const stateWithExpenses = rebuildStateFromExpenses(baseState, expenses);
+  return applyOfflineSavingsToState(stateWithExpenses);
+}
+
+function applyOfflineSavingsToState(baseState) {
+  if (!baseState?.savings) return baseState;
+  const queue = state.offlineQueue.filter(item =>
+    item.type === "saving-create" ||
+    item.type === "saving-update" ||
+    item.type === "saving-delete"
+  );
+  if (queue.length === 0) return baseState;
+
+  const members = baseState.members || [];
+  const deletedIds = new Set();
+  const byId = new Map((baseState.savings.items || []).map(item => [item.id, { ...item }]));
+
+  queue.forEach(item => {
+    if (item.type === "saving-delete") {
+      deletedIds.add(item.savingId);
+      byId.delete(item.savingId);
+      return;
+    }
+
+    if (item.type === "saving-create") {
+      const saving = savingFromPayload(
+        item.localId,
+        item.payload,
+        item.queuedAt,
+        item.lastError ? "failed-create" : "pending-create",
+        members
+      );
+      byId.set(saving.id, saving);
+      return;
+    }
+
+    if (item.type === "saving-update") {
+      if (deletedIds.has(item.savingId)) return;
+      const previous = byId.get(item.savingId);
+      const saving = savingFromPayload(
+        item.savingId,
+        item.payload,
+        previous?.createdAt || item.queuedAt,
+        item.lastError ? "failed-update" : "pending-update",
+        members,
+        previous
+      );
+      byId.set(saving.id, saving);
+    }
+  });
+
+  const items = Array.from(byId.values()).sort((a, b) => {
+    if (a.date === b.date) return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+    return String(b.date || "").localeCompare(String(a.date || ""));
+  });
+
+  const totals = recalculateSavingsTotals(items, members, baseState.month);
+  return { ...baseState, savings: { totals, items } };
+}
+
+function savingFromPayload(id, payload, createdAt, syncStatus, members, previous = {}) {
+  const member = payload.member && members.includes(payload.member) ? payload.member : "";
+  return {
+    ...previous,
+    id,
+    date: payload.date,
+    member,
+    amount: roundMoney(payload.amount),
+    note: payload.note || "",
+    createdAt: createdAt || new Date().toISOString(),
+    updatedAt: syncStatus === "pending-create" ? previous.updatedAt : new Date().toISOString(),
+    syncStatus
+  };
+}
+
+function recalculateSavingsTotals(items, members, month) {
+  const all = roundMoney(items.reduce((sum, item) => sum + Number(item.amount || 0), 0));
+  const monthItems = items.filter(item => String(item.date || "").startsWith(month));
+  const monthTotal = roundMoney(monthItems.reduce((sum, item) => sum + Number(item.amount || 0), 0));
+  const byMember = {};
+  [...members, "共同"].forEach(key => { byMember[key] = 0; });
+  monthItems.forEach(item => {
+    const key = item.member && members.includes(item.member) ? item.member : "共同";
+    byMember[key] = roundMoney((byMember[key] || 0) + Number(item.amount || 0));
+  });
+  return { all, month: monthTotal, monthCount: monthItems.length, byMember };
 }
 
 function rebuildStateFromExpenses(baseState, expenses) {
@@ -2254,7 +2492,8 @@ function renderSavingsList() {
 
     group.items.forEach(item => {
       const node = document.createElement("div");
-      node.className = "day-item day-item-button";
+      const statusLabel = syncStatusLabel(item.syncStatus);
+      node.className = `day-item day-item-button${statusLabel ? " is-pending-sync" : ""}`;
       node.dataset.savingId = item.id;
       node.tabIndex = 0;
       node.setAttribute("role", "button");
@@ -2270,6 +2509,7 @@ function renderSavingsList() {
         </div>
         <div class="day-item-side">
           <div class="recent-amount savings-amount-positive">+${money(item.amount)}</div>
+          ${statusLabel ? `<span class="sync-status-pill">${escapeHtml(statusLabel)}</span>` : ""}
           <span class="detail-chevron" aria-hidden="true">›</span>
         </div>
       `;
@@ -2331,7 +2571,7 @@ function renderSavingDetail() {
   elements.savingDetailAmountInput.value = item.amount;
   elements.savingDetailDateInput.value = item.date;
   elements.savingDetailNoteInput.value = item.note || "";
-  elements.savingDetailFeedback.textContent = "";
+  elements.savingDetailFeedback.textContent = syncStatusLabel(item.syncStatus);
 
   elements.savingDetailMemberSelect.innerHTML = "";
   savingMemberOptions().forEach(opt => {
@@ -2379,7 +2619,27 @@ async function submitSaving(event) {
     render();
     showSuccessPopup("存钱成功");
   } catch (error) {
-    elements.savingFeedback.textContent = error.isNetworkError ? "网络不可用，请稍后再试" : error.message;
+    if (error.isNetworkError) {
+      try {
+        const payload = collectSavingPayload(
+          elements.savingAmountInput,
+          state.savingMember,
+          elements.savingDateInput,
+          elements.savingNoteInput
+        );
+        enqueueOfflineSavingCreate(payload);
+        applyOfflineMutation();
+        elements.savingAmountInput.value = "";
+        elements.savingNoteInput.value = "";
+        elements.savingFeedback.textContent = `网络不可用，已加入待同步队列（${state.offlineQueue.length} 笔）`;
+        render();
+        showSuccessPopup("已离线保存");
+      } catch (validationError) {
+        elements.savingFeedback.textContent = validationError.message;
+      }
+      return;
+    }
+    elements.savingFeedback.textContent = error.message;
   }
 }
 
@@ -2387,6 +2647,7 @@ async function saveSavingDetail(event) {
   event.preventDefault();
   if (!state.selectedSavingId) return;
   elements.savingDetailFeedback.textContent = "保存中...";
+  const savingId = state.selectedSavingId;
   try {
     const payload = collectSavingPayload(
       elements.savingDetailAmountInput,
@@ -2394,7 +2655,18 @@ async function saveSavingDetail(event) {
       elements.savingDetailDateInput,
       elements.savingDetailNoteInput
     );
-    const result = await api(`/api/savings/${encodeURIComponent(state.selectedSavingId)}?month=${encodeURIComponent(state.data.month)}`, {
+
+    if (hasQueuedOperationForSaving(savingId)) {
+      enqueueOfflineSavingUpdate(savingId, payload);
+      applyOfflineMutation();
+      state.selectedSavingId = null;
+      render();
+      showSavingsList();
+      showSuccessPopup("已更新待同步修改");
+      return;
+    }
+
+    const result = await api(`/api/savings/${encodeURIComponent(savingId)}?month=${encodeURIComponent(state.data.month)}`, {
       method: "PUT",
       body: JSON.stringify(payload)
     });
@@ -2404,15 +2676,46 @@ async function saveSavingDetail(event) {
     render();
     showSuccessPopup("保存成功");
   } catch (error) {
-    elements.savingDetailFeedback.textContent = error.isNetworkError ? "网络不可用，请稍后再试" : error.message;
+    if (error.isNetworkError) {
+      try {
+        const payload = collectSavingPayload(
+          elements.savingDetailAmountInput,
+          elements.savingDetailMemberSelect.value,
+          elements.savingDetailDateInput,
+          elements.savingDetailNoteInput
+        );
+        enqueueOfflineSavingUpdate(savingId, payload);
+        applyOfflineMutation();
+        state.selectedSavingId = null;
+        render();
+        showSavingsList();
+        showSuccessPopup("已离线保存修改");
+      } catch (validationError) {
+        elements.savingDetailFeedback.textContent = validationError.message;
+      }
+      return;
+    }
+    elements.savingDetailFeedback.textContent = error.message;
   }
 }
 
 async function deleteSelectedSaving() {
   if (!state.selectedSavingId) return;
   if (!window.confirm("删除这条存钱记录？")) return;
+  const savingId = state.selectedSavingId;
+
+  if (hasQueuedOperationForSaving(savingId)) {
+    enqueueOfflineSavingDelete(savingId);
+    applyOfflineMutation();
+    state.selectedSavingId = null;
+    render();
+    showSavingsList();
+    showSuccessPopup("已从待同步队列移除");
+    return;
+  }
+
   try {
-    const result = await api(`/api/savings/${encodeURIComponent(state.selectedSavingId)}?month=${encodeURIComponent(state.data.month)}`, {
+    const result = await api(`/api/savings/${encodeURIComponent(savingId)}?month=${encodeURIComponent(state.data.month)}`, {
       method: "DELETE"
     });
     state.data = result.state;
@@ -2421,7 +2724,16 @@ async function deleteSelectedSaving() {
     render();
     showSuccessPopup("已删除");
   } catch (error) {
-    elements.savingDetailFeedback.textContent = error.isNetworkError ? "网络不可用，请稍后再试" : error.message;
+    if (error.isNetworkError) {
+      enqueueOfflineSavingDelete(savingId);
+      applyOfflineMutation();
+      state.selectedSavingId = null;
+      render();
+      showSavingsList();
+      showSuccessPopup("已离线删除");
+      return;
+    }
+    elements.savingDetailFeedback.textContent = error.message;
   }
 }
 
@@ -2733,7 +3045,47 @@ async function syncOfflineQueueItem(item) {
     });
   }
 
+  if (item.type === "saving-create") {
+    const result = await api("/api/savings", {
+      method: "POST",
+      body: JSON.stringify(item.payload)
+    });
+    const serverId = result.saving?.id;
+    if (serverId && item.localId) {
+      replaceQueuedSavingId(item.localId, serverId);
+      if (state.selectedSavingId === item.localId) state.selectedSavingId = serverId;
+    }
+    return result;
+  }
+
+  if (item.type === "saving-update") {
+    return api(`/api/savings/${encodeURIComponent(item.savingId)}?month=${encodeURIComponent(item.month || state.data.month)}`, {
+      method: "PUT",
+      body: JSON.stringify(item.payload)
+    });
+  }
+
+  if (item.type === "saving-delete") {
+    return api(`/api/savings/${encodeURIComponent(item.savingId)}?month=${encodeURIComponent(item.month || state.data.month)}`, {
+      method: "DELETE"
+    });
+  }
+
   throw new Error("离线队列类型不正确");
+}
+
+function replaceQueuedSavingId(localId, serverId) {
+  state.offlineQueue.forEach(item => {
+    if (item.savingId === localId) item.savingId = serverId;
+    if (item.localId === localId) item.localId = serverId;
+  });
+  const replaceInItems = items => {
+    items?.forEach(saving => {
+      if (saving.id === localId) saving.id = serverId;
+    });
+  };
+  replaceInItems(state.data?.savings?.items);
+  state.trendStates.forEach(trendState => replaceInItems(trendState.savings?.items));
 }
 
 function replaceQueuedExpenseId(localId, serverId) {
@@ -2982,11 +3334,20 @@ function applyOfflineMutation() {
   state.offlineQueue.forEach(item => {
     if (item.localId) queuedIds.add(item.localId);
     if (item.expenseId) queuedIds.add(item.expenseId);
+    if (item.savingId) queuedIds.add(item.savingId);
   });
   const baseState = {
     ...state.data,
     expenses: state.data.expenses.filter(expense => !expense.id.startsWith("local_") || queuedIds.has(expense.id))
   };
+  if (state.data.savings) {
+    baseState.savings = {
+      ...state.data.savings,
+      items: (state.data.savings.items || []).filter(item =>
+        !String(item.id || "").startsWith("local_") || queuedIds.has(item.id)
+      )
+    };
+  }
   const nextState = applyOfflineQueueToState(rebuildStateFromExpenses(baseState, baseState.expenses));
   state.data = nextState;
   replaceTrendState(nextState);
