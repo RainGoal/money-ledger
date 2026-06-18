@@ -29,8 +29,11 @@ const DEFAULT_DATA = {
     { id: "home", name: "居家", icon: "🏠", color: "#6f6a35", limit: 1200 }
   ],
   monthlyBudgets: {},
-  expenses: []
+  expenses: [],
+  savings: []
 };
+
+const SHARED_MEMBER = "共同";
 
 const MIME_TYPES = {
   ".html": "text/html; charset=utf-8",
@@ -86,9 +89,11 @@ function loadJsonDataFile() {
     members: Array.isArray(data.members) ? data.members : DEFAULT_DATA.members,
     categories: Array.isArray(data.categories) ? data.categories : DEFAULT_DATA.categories,
     monthlyBudgets: data.monthlyBudgets && typeof data.monthlyBudgets === "object" ? data.monthlyBudgets : {},
-    expenses: Array.isArray(data.expenses) ? data.expenses : []
+    expenses: Array.isArray(data.expenses) ? data.expenses : [],
+    savings: Array.isArray(data.savings) ? data.savings : []
   };
   ensureExpenseIds(normalized.expenses);
+  ensureExpenseIds(normalized.savings);
   return normalized;
 }
 
@@ -171,6 +176,19 @@ function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category_id);
     CREATE INDEX IF NOT EXISTS idx_expenses_member ON expenses(member);
 
+    CREATE TABLE IF NOT EXISTS savings (
+      id TEXT PRIMARY KEY,
+      date TEXT NOT NULL,
+      amount REAL NOT NULL,
+      member TEXT,
+      note TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_savings_date ON savings(date);
+    CREATE INDEX IF NOT EXISTS idx_savings_member ON savings(member);
+
     CREATE TABLE IF NOT EXISTS push_subscriptions (
       endpoint TEXT PRIMARY KEY,
       subscription_json TEXT NOT NULL,
@@ -248,7 +266,8 @@ function serializeData() {
     members: [],
     categories: [],
     monthlyBudgets: {},
-    expenses: []
+    expenses: [],
+    savings: []
   };
 
   data.members = db.prepare("SELECT name FROM members ORDER BY sort_order, name").all().map(row => row.name);
@@ -299,6 +318,30 @@ function serializeData() {
     return expense;
   });
 
+  data.savings = db.prepare(`
+    SELECT
+      id,
+      date,
+      member,
+      amount,
+      note,
+      created_at AS createdAt,
+      updated_at AS updatedAt
+    FROM savings
+    ORDER BY date DESC, created_at DESC
+  `).all().map(row => {
+    const saving = {
+      id: row.id,
+      date: row.date,
+      member: row.member || "",
+      amount: roundMoney(row.amount),
+      note: row.note || "",
+      createdAt: row.createdAt
+    };
+    if (row.updatedAt) saving.updatedAt = row.updatedAt;
+    return saving;
+  });
+
   return data;
 }
 
@@ -311,6 +354,7 @@ function replaceAllData(input) {
   runTransaction(() => {
     db.exec(`
       DELETE FROM expenses;
+      DELETE FROM savings;
       DELETE FROM monthly_budgets;
       DELETE FROM categories;
       DELETE FROM members;
@@ -361,6 +405,22 @@ function insertData(data) {
       expense.updatedAt || null
     );
   });
+
+  const insertSavingRow = db.prepare(`
+    INSERT INTO savings (id, date, member, amount, note, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+  (data.savings || []).forEach(saving => {
+    insertSavingRow.run(
+      saving.id,
+      saving.date,
+      saving.member || null,
+      saving.amount,
+      saving.note || "",
+      saving.createdAt,
+      saving.updatedAt || null
+    );
+  });
 }
 
 function insertExpense(expense) {
@@ -398,6 +458,41 @@ function updateExpense(id, patch) {
 
 function deleteExpenseById(id) {
   return db.prepare("DELETE FROM expenses WHERE id = ?").run(id).changes > 0;
+}
+
+function insertSaving(saving) {
+  db.prepare(`
+    INSERT INTO savings (id, date, member, amount, note, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    saving.id,
+    saving.date,
+    saving.member || null,
+    saving.amount,
+    saving.note || "",
+    saving.createdAt,
+    saving.updatedAt || null
+  );
+}
+
+function updateSaving(id, patch) {
+  const result = db.prepare(`
+    UPDATE savings
+    SET date = ?, member = ?, amount = ?, note = ?, updated_at = ?
+    WHERE id = ?
+  `).run(
+    patch.date,
+    patch.member || null,
+    patch.amount,
+    patch.note || "",
+    patch.updatedAt,
+    id
+  );
+  return result.changes > 0;
+}
+
+function deleteSavingById(id) {
+  return db.prepare("DELETE FROM savings WHERE id = ?").run(id).changes > 0;
 }
 
 function saveSettingsData(members, categories, month) {
@@ -868,6 +963,43 @@ function categoryBudget(data, month, category) {
   return roundMoney(category.limit);
 }
 
+function buildSavingsView(data, month) {
+  const items = (data.savings || []).slice().sort((a, b) => {
+    if (a.date === b.date) return String(b.createdAt || "").localeCompare(String(a.createdAt || ""));
+    return String(b.date || "").localeCompare(String(a.date || ""));
+  });
+
+  const total = roundMoney(items.reduce((sum, item) => sum + Number(item.amount || 0), 0));
+  const monthItems = items.filter(item => String(item.date || "").startsWith(month));
+  const monthTotal = roundMoney(monthItems.reduce((sum, item) => sum + Number(item.amount || 0), 0));
+
+  const memberKeys = [...data.members, SHARED_MEMBER];
+  const byMember = {};
+  memberKeys.forEach(key => { byMember[key] = 0; });
+  monthItems.forEach(item => {
+    const key = item.member && data.members.includes(item.member) ? item.member : SHARED_MEMBER;
+    byMember[key] = roundMoney((byMember[key] || 0) + Number(item.amount || 0));
+  });
+
+  return {
+    totals: {
+      all: total,
+      month: monthTotal,
+      monthCount: monthItems.length,
+      byMember
+    },
+    items: items.map(item => ({
+      id: item.id,
+      date: item.date,
+      member: item.member && data.members.includes(item.member) ? item.member : "",
+      amount: roundMoney(item.amount),
+      note: item.note || "",
+      createdAt: item.createdAt,
+      ...(item.updatedAt ? { updatedAt: item.updatedAt } : {})
+    }))
+  };
+}
+
 function buildState(data, month = currentMonth()) {
   const safeMonth = isValidMonth(month) ? month : currentMonth();
   const clock = monthClock(safeMonth);
@@ -932,7 +1064,8 @@ function buildState(data, month = currentMonth()) {
       daysInMonth: clock.days,
       elapsedDays: clock.elapsedDays,
       remainingDays: clock.remainingDays
-    }
+    },
+    savings: buildSavingsView(data, safeMonth)
   };
 }
 
@@ -1078,6 +1211,35 @@ function normalizeExpenses(input, categories, members) {
     .filter(Boolean);
 }
 
+function normalizeSavings(input, members) {
+  if (!Array.isArray(input)) return [];
+
+  return input
+    .map(saving => {
+      if (!saving || typeof saving !== "object") return null;
+
+      const date = String(saving.date || "").trim();
+      const amount = roundMoney(saving.amount);
+      const memberRaw = String(saving.member || "").trim();
+      if (!isValidDate(date) || !Number.isFinite(amount) || amount <= 0) return null;
+
+      const member = memberRaw && members.includes(memberRaw) ? memberRaw : "";
+      const createdAt = normalizeTimestamp(saving.createdAt, new Date().toISOString());
+      const normalized = {
+        id: String(saving.id || "").trim(),
+        date,
+        member,
+        amount,
+        note: String(saving.note || "").trim().slice(0, 80),
+        createdAt
+      };
+      const updatedAt = normalizeTimestamp(saving.updatedAt, "");
+      if (updatedAt) normalized.updatedAt = updatedAt;
+      return normalized;
+    })
+    .filter(Boolean);
+}
+
 function normalizeImportedData(payload) {
   const source = payload?.data && typeof payload.data === "object" ? payload.data : payload;
   if (!source || typeof source !== "object") return null;
@@ -1090,9 +1252,11 @@ function normalizeImportedData(payload) {
     members,
     categories,
     monthlyBudgets: normalizeMonthlyBudgets(source.monthlyBudgets, categories),
-    expenses: normalizeExpenses(source.expenses, categories, members)
+    expenses: normalizeExpenses(source.expenses, categories, members),
+    savings: normalizeSavings(source.savings, members)
   };
   ensureExpenseIds(normalized.expenses);
+  ensureExpenseIds(normalized.savings);
   return normalized;
 }
 
@@ -1233,7 +1397,8 @@ async function handleApi(req, res, url) {
       members: [...DEFAULT_DATA.members],
       categories: DEFAULT_DATA.categories.map(category => ({ ...category })),
       monthlyBudgets: {},
-      expenses: []
+      expenses: [],
+      savings: []
     };
     replaceAllData(cleared);
     sendJson(res, 200, { ok: true, state: buildState(cleared, month) });
@@ -1335,6 +1500,94 @@ async function handleApi(req, res, url) {
     const id = decodeURIComponent(url.pathname.replace("/api/expenses/", ""));
     if (!deleteExpenseById(id)) {
       sendJson(res, 404, { error: "expense_not_found" });
+      return;
+    }
+    sendJson(res, 200, { ok: true, state: buildState(loadData(), month) });
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/savings") {
+    sendJson(res, 200, buildSavingsView(data, month));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/savings") {
+    const payload = await readJson(req);
+    const amount = roundMoney(payload.amount);
+    const date = String(payload.date || currentDate()).trim();
+    const memberRaw = String(payload.member || "").trim();
+    const note = String(payload.note || "").trim().slice(0, 80);
+
+    if (!isValidDate(date)) {
+      sendJson(res, 400, { error: "invalid_date" });
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      sendJson(res, 400, { error: "invalid_amount" });
+      return;
+    }
+    if (memberRaw && !data.members.includes(memberRaw)) {
+      sendJson(res, 400, { error: "invalid_member" });
+      return;
+    }
+
+    const saving = {
+      id: crypto.randomUUID(),
+      date,
+      member: memberRaw,
+      amount,
+      note,
+      createdAt: new Date().toISOString()
+    };
+    insertSaving(saving);
+    sendJson(res, 201, { saving, state: buildState(loadData(), month) });
+    return;
+  }
+
+  if (req.method === "PUT" && url.pathname.startsWith("/api/savings/")) {
+    const id = decodeURIComponent(url.pathname.replace("/api/savings/", ""));
+    const saving = (data.savings || []).find(item => item.id === id);
+    if (!saving) {
+      sendJson(res, 404, { error: "saving_not_found" });
+      return;
+    }
+
+    const payload = await readJson(req);
+    const amount = roundMoney(payload.amount);
+    const date = String(payload.date || saving.date || currentDate()).trim();
+    const memberRaw = String(payload.member ?? saving.member ?? "").trim();
+    const note = String(payload.note || "").trim().slice(0, 80);
+
+    if (!isValidDate(date)) {
+      sendJson(res, 400, { error: "invalid_date" });
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      sendJson(res, 400, { error: "invalid_amount" });
+      return;
+    }
+    if (memberRaw && !data.members.includes(memberRaw)) {
+      sendJson(res, 400, { error: "invalid_member" });
+      return;
+    }
+
+    const updated = {
+      ...saving,
+      date,
+      member: memberRaw,
+      amount,
+      note,
+      updatedAt: new Date().toISOString()
+    };
+    updateSaving(saving.id, updated);
+    sendJson(res, 200, { saving: updated, state: buildState(loadData(), month) });
+    return;
+  }
+
+  if (req.method === "DELETE" && url.pathname.startsWith("/api/savings/")) {
+    const id = decodeURIComponent(url.pathname.replace("/api/savings/", ""));
+    if (!deleteSavingById(id)) {
+      sendJson(res, 404, { error: "saving_not_found" });
       return;
     }
     sendJson(res, 200, { ok: true, state: buildState(loadData(), month) });

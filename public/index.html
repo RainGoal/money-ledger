@@ -106,7 +106,7 @@
         }
       }
     </style>
-    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=40">
+    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=41">
   </head>
   <body>
     <div id="startupScreen" class="startup-screen" role="status" aria-live="polite">
@@ -336,6 +336,102 @@
               <button id="recordDeleteButton" class="danger-button" type="button">删除记录</button>
             </div>
             <p id="recordFeedback" class="feedback" role="status"></p>
+          </form>
+        </section>
+
+        <section id="savingsView" class="view" aria-label="存钱">
+          <div id="savingsListPane">
+            <div class="savings-summary">
+              <span class="savings-summary-label">累计存款</span>
+              <strong id="savingsTotalAll">0.00</strong>
+              <span id="savingsMonthDelta" class="savings-summary-delta">本月 +0.00</span>
+            </div>
+
+            <div class="section-heading">
+              <h2>本月按成员</h2>
+              <span id="savingsMemberSummary" class="panel-hint">本月 0 笔</span>
+            </div>
+            <div id="savingsMemberList" class="savings-member-list"></div>
+
+            <form id="savingForm" class="entry-panel savings-form">
+              <label class="amount-field">
+                <span>金额</span>
+                <input id="savingAmountInput" inputmode="decimal" autocomplete="off" placeholder="0.00" required>
+              </label>
+
+              <div class="entry-secondary-row">
+                <div class="field-group entry-member-field">
+                  <span class="field-label">成员</span>
+                  <div id="savingMemberChips" class="segmented"></div>
+                </div>
+                <label class="entry-date-field">
+                  <span>日期</span>
+                  <input id="savingDateInput" type="date" required>
+                </label>
+              </div>
+
+              <label class="entry-note-field">
+                <span>备注</span>
+                <input id="savingNoteInput" maxlength="80" placeholder="可选">
+              </label>
+
+              <div class="entry-submit-bar" aria-label="提交存钱">
+                <div class="entry-submit-summary">
+                  <strong id="savingSubmitAmount">待填写金额</strong>
+                  <span id="savingSubmitMeta">选择成员</span>
+                  <p id="savingFeedback" class="feedback entry-submit-feedback" role="status"></p>
+                </div>
+                <button class="primary-button entry-submit-button" type="submit">记一笔</button>
+              </div>
+            </form>
+
+            <div class="section-heading">
+              <h2>存钱明细</h2>
+              <span id="savingsListSummary" class="panel-hint">本月 0 笔</span>
+            </div>
+            <div id="savingsList" class="detail-list"></div>
+          </div>
+
+          <form id="savingDetailForm" class="record-detail-panel" hidden>
+            <div class="record-detail-head">
+              <button id="savingBackButton" class="ghost-button" type="button">返回</button>
+              <div>
+                <p class="eyebrow">Saving Detail</p>
+                <h2>存钱详情</h2>
+              </div>
+            </div>
+
+            <div class="record-meta">
+              <span>记账时间</span>
+              <strong id="savingCreatedAt">-</strong>
+            </div>
+
+            <label class="record-amount-field">
+              <span>金额</span>
+              <input id="savingDetailAmountInput" inputmode="decimal" autocomplete="off" required>
+            </label>
+
+            <div class="two-column">
+              <label>
+                <span>成员</span>
+                <select id="savingDetailMemberSelect"></select>
+              </label>
+              <label>
+                <span>日期</span>
+                <input id="savingDetailDateInput" type="date" required>
+              </label>
+            </div>
+
+            <label>
+              <span>备注</span>
+              <input id="savingDetailNoteInput" maxlength="80" placeholder="可选">
+            </label>
+
+            <div class="record-actions">
+              <button class="primary-button" type="submit">保存修改</button>
+              <button id="savingDeleteButton" class="danger-button" type="button">删除记录</button>
+            </div>
+            <p id="savingDetailFeedback" class="feedback" role="status"></p>
           </form>
         </section>
 
@@ -603,6 +699,12 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
           </span>
         </button>
+        <button class="tab" data-view="savings" type="button" aria-label="存钱">
+          <span class="tab-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11.5a6 5 0 0 1 12 0v.5a4 4 0 0 1-1.5 3v3h-2v-1.5h-5V18h-2v-3a4 4 0 0 1-1.5-3zM4.5 12.5h1.6M14.5 9.5h.01" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+          <span class="tab-label">存钱</span>
+        </button>
         <button class="tab" data-view="stats" type="button" aria-label="统计">
           <span class="tab-icon">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V9m7 10V5m7 14v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -690,6 +792,6 @@
         }, true);
       })();
     </script>
-    <script src="__BASE_PATH__/app.js?v=40" defer></script>
+    <script src="__BASE_PATH__/app.js?v=41" defer></script>
   </body>
 </html>

@@ -5,6 +5,8 @@ const state = {
   selectedStatsDate: null,
   selectedExpenseId: null,
   selectedDashboardCategoryId: null,
+  selectedSavingId: null,
+  savingMember: null,
   detailFilters: { query: "", categoryId: "", member: "" },
   entryTemplates: [],
   trendStates: [],
@@ -27,6 +29,7 @@ const elements = {
     dashboard: document.querySelector("#dashboardView"),
     entry: document.querySelector("#entryView"),
     details: document.querySelector("#detailsView"),
+    savings: document.querySelector("#savingsView"),
     stats: document.querySelector("#statsView"),
     settings: document.querySelector("#settingsView")
   },
@@ -125,7 +128,31 @@ const elements = {
   successPopupMessage: document.querySelector("#successPopupMessage"),
   pwaUpdatePrompt: document.querySelector("#pwaUpdatePrompt"),
   pwaUpdateButton: document.querySelector("#pwaUpdateButton"),
-  pwaUpdateDismiss: document.querySelector("#pwaUpdateDismiss")
+  pwaUpdateDismiss: document.querySelector("#pwaUpdateDismiss"),
+  savingsTotalAll: document.querySelector("#savingsTotalAll"),
+  savingsMonthDelta: document.querySelector("#savingsMonthDelta"),
+  savingsMemberSummary: document.querySelector("#savingsMemberSummary"),
+  savingsMemberList: document.querySelector("#savingsMemberList"),
+  savingsList: document.querySelector("#savingsList"),
+  savingsListSummary: document.querySelector("#savingsListSummary"),
+  savingsListPane: document.querySelector("#savingsListPane"),
+  savingForm: document.querySelector("#savingForm"),
+  savingAmountInput: document.querySelector("#savingAmountInput"),
+  savingMemberChips: document.querySelector("#savingMemberChips"),
+  savingDateInput: document.querySelector("#savingDateInput"),
+  savingNoteInput: document.querySelector("#savingNoteInput"),
+  savingSubmitAmount: document.querySelector("#savingSubmitAmount"),
+  savingSubmitMeta: document.querySelector("#savingSubmitMeta"),
+  savingFeedback: document.querySelector("#savingFeedback"),
+  savingDetailForm: document.querySelector("#savingDetailForm"),
+  savingBackButton: document.querySelector("#savingBackButton"),
+  savingCreatedAt: document.querySelector("#savingCreatedAt"),
+  savingDetailAmountInput: document.querySelector("#savingDetailAmountInput"),
+  savingDetailMemberSelect: document.querySelector("#savingDetailMemberSelect"),
+  savingDetailDateInput: document.querySelector("#savingDetailDateInput"),
+  savingDetailNoteInput: document.querySelector("#savingDetailNoteInput"),
+  savingDeleteButton: document.querySelector("#savingDeleteButton"),
+  savingDetailFeedback: document.querySelector("#savingDetailFeedback")
 };
 
 const cropper = {
@@ -167,6 +194,7 @@ const MINIMAL_TAB_ICONS = {
   dashboard: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 10.5 12 4l7.5 6.5V20a1 1 0 0 1-1 1h-4.25v-5.5h-4.5V21H5.5a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg>`,
   details: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 7h11M6.5 12h11M6.5 17h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
   entry: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>`,
+  savings: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11.5a6 5 0 0 1 12 0v.5a4 4 0 0 1-1.5 3v3h-2v-1.5h-5V18h-2v-3a4 4 0 0 1-1.5-3zM4.5 12.5h1.6M14.5 9.5h.01" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   stats: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V9m7 10V5m7 14v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
   settings: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5A3.5 3.5 0 1 0 12 15.5 3.5 3.5 0 0 0 12 8.5Zm7.2 3.5c0-.5-.1-1-.2-1.5l2-1.5-2-3.5-2.4 1a8 8 0 0 0-2.6-1.5L13.7 2h-4l-.4 3a8 8 0 0 0-2.6 1.5l-2.4-1-2 3.5 2 1.5A8 8 0 0 0 4 12c0 .5.1 1 .2 1.5l-2 1.5 2 3.5 2.4-1A8 8 0 0 0 9.2 19l.4 3h4l.4-3a8 8 0 0 0 2.6-1.5l2.4 1 2-3.5-2-1.5c.1-.5.2-1 .2-1.5Z" fill="none" stroke="currentColor" stroke-width="1.55" stroke-linejoin="round"/></svg>`
 };
@@ -175,6 +203,7 @@ const CUTE_TAB_SYMBOLS = {
   dashboard: `<path class="kitty-symbol" d="M8.9 16.2 12 13.6l3.1 2.6v2.2h-2v-1.6h-2.2v1.6h-2z"/>`,
   details: `<path class="kitty-symbol" d="M8.7 15.1h6.6M8.7 17.1h6.6M8.7 19.1h4.2"/>`,
   entry: `<path class="kitty-symbol" d="M12 14.3v5M9.5 16.8h5"/>`,
+  savings: `<path class="kitty-symbol" d="M9 16.5a3 2.5 0 0 1 6 0v.4a2 2 0 0 1-.8 1.6v.9h-1V18.6h-2.4v.8h-1V18.5a2 2 0 0 1-.8-1.6z"/>`,
   stats: `<path class="kitty-symbol" d="M9 18.9v-2.8M12 18.9v-4.6M15 18.9v-3.5"/>`,
   settings: `<path class="kitty-symbol" d="M12 15.1a1.7 1.7 0 1 0 0 3.4 1.7 1.7 0 0 0 0-3.4Zm4.2 1.7h-1M9.8 16.8h-1M12 13.6v-1M12 21v-1"/>`
 };
@@ -189,12 +218,14 @@ const CUSTOM_TAB_SLOTS = [
   { key: "dashboard", label: "首页图标" },
   { key: "details", label: "明细图标" },
   { key: "entry", label: "记账图标" },
+  { key: "savings", label: "存钱图标" },
   { key: "stats", label: "统计图标" },
   { key: "settings", label: "设置图标" }
 ];
 const CUSTOM_VIEW_SLOTS = [
   { key: "dashboard", label: "首页背景" },
   { key: "details", label: "明细背景" },
+  { key: "savings", label: "存钱背景" },
   { key: "stats", label: "统计背景" },
   { key: "settings", label: "设置背景" }
 ];
@@ -958,6 +989,7 @@ function apiHeaders() {
 const API_ERROR_MESSAGES = {
   not_found: "服务接口未找到，请重启应用后再试",
   expense_not_found: "没有找到这条记录，请返回明细后刷新再试",
+  saving_not_found: "没有找到这条存钱记录，请返回后刷新再试",
   push_not_configured: "服务器还没有配置推送密钥",
   push_subscription_missing: "当前没有可用的推送订阅，请先开启通知",
   push_send_failed: "推送发送失败，请检查服务器网络和 VAPID 配置",
@@ -2103,6 +2135,296 @@ function renderRankList(items) {
   });
 }
 
+const SAVINGS_SHARED_LABEL = "共同";
+const SAVINGS_SHARED_VALUE = "";
+
+function savingMemberOptions() {
+  return [
+    { value: SAVINGS_SHARED_VALUE, label: SAVINGS_SHARED_LABEL },
+    ...state.data.members.map(member => ({ value: member, label: member }))
+  ];
+}
+
+function savingMemberLabel(member) {
+  return member && state.data.members.includes(member) ? member : SAVINGS_SHARED_LABEL;
+}
+
+function renderSavingsSummary() {
+  if (!elements.savingsTotalAll || !state.data?.savings) return;
+  const totals = state.data.savings.totals;
+  elements.savingsTotalAll.textContent = money(totals.all);
+  const monthLabelText = totals.month > 0
+    ? `本月 +${money(totals.month)}`
+    : "本月 +0.00";
+  elements.savingsMonthDelta.textContent = monthLabelText;
+}
+
+function renderSavingsMembers() {
+  if (!elements.savingsMemberList || !state.data?.savings) return;
+  const totals = state.data.savings.totals;
+  const entries = savingMemberOptions().map(option => ({
+    label: option.label,
+    member: option.value,
+    amount: Number(totals.byMember?.[option.value || SAVINGS_SHARED_LABEL] || 0)
+  }));
+
+  elements.savingsMemberSummary.textContent = `本月 ${totals.monthCount} 笔 · 合计 ${money(totals.month)}`;
+  elements.savingsMemberList.innerHTML = "";
+
+  const max = Math.max(...entries.map(item => item.amount), 1);
+  entries.forEach(entry => {
+    const percent = Math.max(entry.amount > 0 ? 6 : 0, Math.round((entry.amount / max) * 100));
+    const row = document.createElement("article");
+    row.className = "savings-member-row";
+    row.innerHTML = `
+      <div class="savings-member-row-head">
+        <strong>${escapeHtml(entry.label)}</strong>
+        <em>${money(entry.amount)}</em>
+      </div>
+      <div class="trend-track"><span style="width:${percent}%"></span></div>
+    `;
+    elements.savingsMemberList.appendChild(row);
+  });
+}
+
+function renderSavingMemberChips() {
+  if (!elements.savingMemberChips) return;
+  const options = savingMemberOptions();
+  if (state.savingMember == null || !options.some(item => item.value === state.savingMember)) {
+    state.savingMember = SAVINGS_SHARED_VALUE;
+  }
+
+  elements.savingMemberChips.innerHTML = "";
+  options.forEach(option => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `member-chip${state.savingMember === option.value ? " is-active" : ""}`;
+    button.textContent = option.label;
+    button.addEventListener("click", () => {
+      state.savingMember = option.value;
+      renderSavingMemberChips();
+      renderSavingSubmitBar();
+    });
+    elements.savingMemberChips.appendChild(button);
+  });
+}
+
+function renderSavingSubmitBar() {
+  if (!elements.savingSubmitAmount || !state.data) return;
+  const rawAmount = Number(String(elements.savingAmountInput.value).replace(",", "."));
+  const amount = roundMoney(rawAmount);
+  const memberLabel = savingMemberLabel(state.savingMember);
+  const dateLabel = formatEntryDateLabel(elements.savingDateInput.value);
+  elements.savingSubmitAmount.textContent = Number.isFinite(amount) && amount > 0
+    ? `+¥${money(amount)}`
+    : "待填写金额";
+  elements.savingSubmitMeta.textContent = `${memberLabel} · ${dateLabel}`;
+}
+
+function renderSavingsList() {
+  if (!elements.savingsList || !state.data?.savings) return;
+  const items = state.data.savings.items || [];
+  const monthItems = items.filter(item => String(item.date || "").startsWith(state.data.month));
+  elements.savingsListSummary.textContent = `本月 ${monthItems.length} 笔`;
+  elements.savingsList.innerHTML = "";
+
+  if (monthItems.length === 0) {
+    elements.savingsList.innerHTML = `<div class="empty-state">本月还没有存钱记录</div>`;
+    return;
+  }
+
+  const groups = groupExpensesByDate(monthItems);
+  groups.forEach(group => {
+    const card = document.createElement("article");
+    card.className = "day-group";
+
+    const head = document.createElement("div");
+    head.className = "day-group-head";
+    head.innerHTML = `
+      <div>
+        <div class="day-group-title">${escapeHtml(formatDetailDate(group.date))}</div>
+        <div class="day-group-meta">${group.items.length} 笔</div>
+      </div>
+      <div class="day-total">合计 ${money(group.total)}</div>
+    `;
+    card.appendChild(head);
+
+    const list = document.createElement("div");
+    list.className = "day-items";
+
+    group.items.forEach(item => {
+      const node = document.createElement("div");
+      node.className = "day-item day-item-button";
+      node.dataset.savingId = item.id;
+      node.tabIndex = 0;
+      node.setAttribute("role", "button");
+      node.setAttribute("aria-label", `查看${savingMemberLabel(item.member)} ${money(item.amount)} 的存钱记录`);
+      node.style.setProperty("--accent", "#27845b");
+      node.innerHTML = `
+        <div class="day-item-main">
+          <div class="day-item-title">
+            <span class="category-icon" aria-hidden="true">💰</span>
+            <span>${escapeHtml(savingMemberLabel(item.member))}</span>
+          </div>
+          <div class="record-note${item.note ? "" : " is-empty"}">${item.note ? escapeHtml(item.note) : "无备注"}</div>
+        </div>
+        <div class="day-item-side">
+          <div class="recent-amount savings-amount-positive">+${money(item.amount)}</div>
+          <span class="detail-chevron" aria-hidden="true">›</span>
+        </div>
+      `;
+      const open = () => openSavingDetail(item.id);
+      node.addEventListener("click", open);
+      node.addEventListener("keydown", event => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          open();
+        }
+      });
+      list.appendChild(node);
+    });
+
+    card.appendChild(list);
+    elements.savingsList.appendChild(card);
+  });
+}
+
+function renderSavings() {
+  if (!state.data?.savings) return;
+  renderSavingsSummary();
+  renderSavingsMembers();
+  renderSavingMemberChips();
+  renderSavingSubmitBar();
+  renderSavingsList();
+  renderSavingDetail();
+}
+
+function showSavingsList() {
+  state.selectedSavingId = null;
+  if (elements.savingsListPane) elements.savingsListPane.hidden = false;
+  if (elements.savingDetailForm) elements.savingDetailForm.hidden = true;
+  if (elements.savingDetailFeedback) elements.savingDetailFeedback.textContent = "";
+}
+
+function openSavingDetail(id) {
+  state.selectedSavingId = id;
+  renderSavingDetail();
+  elements.savingDetailAmountInput?.focus();
+}
+
+function renderSavingDetail() {
+  if (!elements.savingDetailForm || !elements.savingsListPane) return;
+  if (!state.selectedSavingId) {
+    showSavingsList();
+    return;
+  }
+
+  const item = state.data?.savings?.items?.find(saving => saving.id === state.selectedSavingId);
+  if (!item) {
+    showSavingsList();
+    return;
+  }
+
+  elements.savingsListPane.hidden = true;
+  elements.savingDetailForm.hidden = false;
+  elements.savingCreatedAt.textContent = formatDateTime(item.createdAt);
+  elements.savingDetailAmountInput.value = item.amount;
+  elements.savingDetailDateInput.value = item.date;
+  elements.savingDetailNoteInput.value = item.note || "";
+  elements.savingDetailFeedback.textContent = "";
+
+  elements.savingDetailMemberSelect.innerHTML = "";
+  savingMemberOptions().forEach(opt => {
+    elements.savingDetailMemberSelect.appendChild(option(opt.label, opt.value, item.member || ""));
+  });
+}
+
+function collectSavingPayload(amountInput, member, dateInput, noteInput) {
+  const amount = roundMoney(Number(String(amountInput.value).replace(",", ".")));
+  const date = dateInput.value;
+  const note = noteInput.value.trim().slice(0, 80);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("金额不正确");
+  }
+  if (!isValidDateValue(date)) {
+    throw new Error("日期不正确");
+  }
+  if (member && !state.data.members.includes(member)) {
+    throw new Error("成员不存在");
+  }
+
+  return { amount, date, note, member: member || "" };
+}
+
+async function submitSaving(event) {
+  event.preventDefault();
+  elements.savingFeedback.textContent = "提交中...";
+  try {
+    const payload = collectSavingPayload(
+      elements.savingAmountInput,
+      state.savingMember,
+      elements.savingDateInput,
+      elements.savingNoteInput
+    );
+    const result = await api(`/api/savings?month=${encodeURIComponent(state.data.month)}`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    state.data = result.state;
+    replaceTrendState(result.state);
+    elements.savingAmountInput.value = "";
+    elements.savingNoteInput.value = "";
+    elements.savingFeedback.textContent = `本月共存 ${money(state.data.savings.totals.month)} · 累计 ${money(state.data.savings.totals.all)}`;
+    render();
+    showSuccessPopup("存钱成功");
+  } catch (error) {
+    elements.savingFeedback.textContent = error.isNetworkError ? "网络不可用，请稍后再试" : error.message;
+  }
+}
+
+async function saveSavingDetail(event) {
+  event.preventDefault();
+  if (!state.selectedSavingId) return;
+  elements.savingDetailFeedback.textContent = "保存中...";
+  try {
+    const payload = collectSavingPayload(
+      elements.savingDetailAmountInput,
+      elements.savingDetailMemberSelect.value,
+      elements.savingDetailDateInput,
+      elements.savingDetailNoteInput
+    );
+    const result = await api(`/api/savings/${encodeURIComponent(state.selectedSavingId)}?month=${encodeURIComponent(state.data.month)}`, {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    });
+    state.data = result.state;
+    replaceTrendState(result.state);
+    state.selectedSavingId = null;
+    render();
+    showSuccessPopup("保存成功");
+  } catch (error) {
+    elements.savingDetailFeedback.textContent = error.isNetworkError ? "网络不可用，请稍后再试" : error.message;
+  }
+}
+
+async function deleteSelectedSaving() {
+  if (!state.selectedSavingId) return;
+  if (!window.confirm("删除这条存钱记录？")) return;
+  try {
+    const result = await api(`/api/savings/${encodeURIComponent(state.selectedSavingId)}?month=${encodeURIComponent(state.data.month)}`, {
+      method: "DELETE"
+    });
+    state.data = result.state;
+    replaceTrendState(result.state);
+    state.selectedSavingId = null;
+    render();
+    showSuccessPopup("已删除");
+  } catch (error) {
+    elements.savingDetailFeedback.textContent = error.isNetworkError ? "网络不可用，请稍后再试" : error.message;
+  }
+}
+
 function createMemberRow(member = "") {
   const row = document.createElement("div");
   row.className = "member-settings-row";
@@ -2299,6 +2621,7 @@ function render() {
   renderDetailFilters();
   renderRecent();
   renderRecordDetail();
+  renderSavings();
   renderStats();
   renderSettings();
 }
@@ -2317,7 +2640,9 @@ async function loadState() {
   state.trendStates = states.map(item => applyOfflineQueueToState(item));
   state.data = state.trendStates[state.trendStates.length - 1];
   elements.monthInput.value = state.data.month;
-  elements.dateInput.value = state.data.month === today().month ? state.data.today : `${state.data.month}-01`;
+  const defaultDate = state.data.month === today().month ? state.data.today : `${state.data.month}-01`;
+  elements.dateInput.value = defaultDate;
+  if (elements.savingDateInput) elements.savingDateInput.value = defaultDate;
   render();
 }
 
@@ -2978,6 +3303,12 @@ function bindEvents() {
   elements.recordDetailForm.addEventListener("submit", saveRecordDetail);
   elements.recordBackButton.addEventListener("click", showRecordList);
   elements.recordDeleteButton.addEventListener("click", deleteSelectedExpense);
+  elements.savingForm?.addEventListener("submit", submitSaving);
+  elements.savingAmountInput?.addEventListener("input", renderSavingSubmitBar);
+  elements.savingDateInput?.addEventListener("change", renderSavingSubmitBar);
+  elements.savingDetailForm?.addEventListener("submit", saveSavingDetail);
+  elements.savingBackButton?.addEventListener("click", showSavingsList);
+  elements.savingDeleteButton?.addEventListener("click", deleteSelectedSaving);
   elements.settingsForm.addEventListener("submit", saveSettings);
   elements.addMemberButton.addEventListener("click", addMemberRow);
   elements.memberRows.addEventListener("click", handleMemberRowsClick);
