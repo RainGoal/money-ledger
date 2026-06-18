@@ -20,6 +20,7 @@
   --focus-ring: rgba(255, 53, 28, 0.1);
   --tabbar-bg: rgba(255, 255, 255, 0.94);
   --tabbar-shadow: 0 -14px 32px rgba(0, 0, 0, 0.08);
+  --tabbar-height: 92px;
 }
 
 html[data-theme="cute"] {
@@ -172,7 +173,7 @@ select {
   overflow-x: hidden;
   overflow-y: auto;
   margin: 0 auto;
-  padding: 38px 24px 128px;
+  padding: 38px 24px 196px;
   isolation: isolate;
   overscroll-behavior-x: none;
   overscroll-behavior-y: contain;
@@ -1442,7 +1443,7 @@ body.is-cropping .app-shell {
   position: fixed;
   left: max(14px, calc((100vw - 520px) / 2 + 14px));
   right: max(14px, calc((100vw - 520px) / 2 + 14px));
-  bottom: calc(92px + env(safe-area-inset-bottom));
+  bottom: calc(184px + env(safe-area-inset-bottom));
   z-index: 80;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -1463,6 +1464,11 @@ body.is-cropping .app-shell {
 .pwa-update-prompt.is-visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+body[data-view="entry"] .pwa-update-prompt,
+body[data-view="savings"] .pwa-update-prompt {
+  bottom: calc(280px + env(safe-area-inset-bottom));
 }
 
 .pwa-update-prompt strong,
@@ -2880,10 +2886,10 @@ html[data-theme="custom"] .calendar-day.has-expense {
   bottom: 0;
   z-index: 30;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 2px;
   width: min(560px, 100%);
-  height: 92px;
+  height: var(--tabbar-height);
   padding: 10px 12px max(10px, env(safe-area-inset-bottom));
   background: var(--tabbar-bg);
   box-shadow: var(--tabbar-shadow);
@@ -3023,15 +3029,29 @@ html[data-theme="custom"] .tabbar .tab.is-active:not(.tab--primary) {
 }
 
 .tabbar .tab--primary {
-  justify-self: center;
-  width: 74px;
-  height: 74px;
-  min-height: 74px;
-  margin-top: -34px;
+  position: absolute;
+  right: 18px;
+  bottom: calc(100% + 12px);
+  z-index: 3;
+  width: 72px;
+  height: 72px;
+  min-height: 72px;
+  margin: 0;
   border-radius: 50%;
   background: linear-gradient(135deg, #ffc400 0%, #ff351c 72%);
   color: #fff;
   box-shadow: 0 16px 34px rgba(255, 53, 28, 0.34);
+}
+
+.tabbar .tab--primary.is-active {
+  box-shadow:
+    0 18px 36px rgba(255, 53, 28, 0.34),
+    0 0 0 7px rgba(255, 53, 28, 0.12);
+}
+
+body[data-view="entry"] .tabbar .tab--primary,
+body[data-view="savings"] .tabbar .tab--primary {
+  bottom: calc(100% + 108px);
 }
 
 .tabbar .tab--primary .tab-icon svg {
@@ -3045,6 +3065,13 @@ html[data-theme="custom"] .tabbar .tab--primary {
   color: var(--accent);
   border: 1px solid rgba(232, 75, 123, 0.26);
   box-shadow: 0 18px 34px rgba(232, 75, 123, 0.2);
+}
+
+html[data-theme="cute"] .tabbar .tab--primary.is-active,
+html[data-theme="custom"] .tabbar .tab--primary.is-active {
+  box-shadow:
+    0 18px 34px rgba(232, 75, 123, 0.22),
+    0 0 0 7px rgba(232, 75, 123, 0.1);
 }
 
 html[data-theme="cute"] .tabbar .tab,
@@ -3068,7 +3095,8 @@ html[data-theme="custom"] .tabbar .tab--primary .custom-tab-image {
 }
 
 html[data-theme="ios26"] .tabbar {
-  height: calc(82px + env(safe-area-inset-bottom));
+  --tabbar-height: calc(82px + env(safe-area-inset-bottom));
+  height: var(--tabbar-height);
   padding: 8px 12px max(8px, env(safe-area-inset-bottom));
   border-top: 1px solid rgba(255, 255, 255, 0.58);
   background:
@@ -3122,7 +3150,6 @@ html[data-theme="ios26"] .tabbar .tab--primary {
   width: 68px;
   height: 68px;
   min-height: 68px;
-  margin-top: -28px;
   border: 1px solid rgba(255, 255, 255, 0.78);
   background:
     radial-gradient(circle at 32% 18%, rgba(255, 255, 255, 0.9), transparent 32%),
@@ -3135,6 +3162,13 @@ html[data-theme="ios26"] .tabbar .tab--primary {
   backdrop-filter: blur(22px) saturate(1.5);
 }
 
+html[data-theme="ios26"] .tabbar .tab--primary.is-active {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    0 18px 34px rgba(10, 132, 255, 0.28),
+    0 0 0 7px rgba(10, 132, 255, 0.12);
+}
+
 html[data-theme="ios26"] .tabbar .tab--primary .tab-icon svg {
   width: 34px;
   height: 34px;
@@ -3142,7 +3176,7 @@ html[data-theme="ios26"] .tabbar .tab--primary .tab-icon svg {
 
 @media (max-width: 560px) {
   .app-shell {
-    padding: 34px 20px 126px;
+    padding: 34px 20px 194px;
   }
 
   .topbar {

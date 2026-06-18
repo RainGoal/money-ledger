@@ -1228,6 +1228,7 @@ function showSuccessPopup(message) {
 }
 
 function setView(view) {
+  document.body.dataset.view = view;
   elements.tabs.forEach(tab => tab.classList.toggle("is-active", tab.dataset.view === view));
   Object.entries(elements.views).forEach(([name, element]) => {
     element.classList.toggle("is-active", name === view);
@@ -3723,6 +3724,7 @@ function init() {
   elements.monthInput.value = now.month;
   elements.dateInput.value = now.date;
   applyTheme(state.theme);
+  setView("dashboard");
   bindEvents();
   registerServiceWorker();
   loadState()
