@@ -106,7 +106,7 @@
         }
       }
     </style>
-    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=42">
+    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=43">
   </head>
   <body>
     <div id="startupScreen" class="startup-screen" role="status" aria-live="polite">
@@ -345,6 +345,9 @@
               <span class="savings-summary-label">累计存款</span>
               <strong id="savingsTotalAll">0.00</strong>
               <span id="savingsMonthDelta" class="savings-summary-delta">本月 +0.00</span>
+              <button id="savingEntryShortcutButton" class="savings-entry-shortcut" type="button" aria-label="去记账">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>
+              </button>
             </div>
 
             <p class="offline-queue-status" data-offline-queue-status role="status" hidden></p>
@@ -794,6 +797,6 @@
         }, true);
       })();
     </script>
-    <script src="__BASE_PATH__/app.js?v=42" defer></script>
+    <script src="__BASE_PATH__/app.js?v=43" defer></script>
   </body>
 </html>

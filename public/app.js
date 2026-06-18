@@ -131,6 +131,7 @@ const elements = {
   pwaUpdateDismiss: document.querySelector("#pwaUpdateDismiss"),
   savingsTotalAll: document.querySelector("#savingsTotalAll"),
   savingsMonthDelta: document.querySelector("#savingsMonthDelta"),
+  savingEntryShortcutButton: document.querySelector("#savingEntryShortcutButton"),
   savingsMemberSummary: document.querySelector("#savingsMemberSummary"),
   savingsMemberList: document.querySelector("#savingsMemberList"),
   savingsList: document.querySelector("#savingsList"),
@@ -3665,6 +3666,7 @@ function bindEvents() {
   elements.recordDetailForm.addEventListener("submit", saveRecordDetail);
   elements.recordBackButton.addEventListener("click", showRecordList);
   elements.recordDeleteButton.addEventListener("click", deleteSelectedExpense);
+  elements.savingEntryShortcutButton?.addEventListener("click", () => setView("entry"));
   elements.savingForm?.addEventListener("submit", submitSaving);
   elements.savingAmountInput?.addEventListener("input", renderSavingSubmitBar);
   elements.savingDateInput?.addEventListener("change", renderSavingSubmitBar);
