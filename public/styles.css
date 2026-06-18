@@ -579,7 +579,7 @@ html[data-theme="cute"] .category-meter {
 .meter span,
 .category-meter span {
   display: block;
-  width: 0;
+  width: var(--meter-width, 0);
   height: 100%;
   border-radius: inherit;
   background: #fff;
@@ -588,6 +588,11 @@ html[data-theme="cute"] .category-meter {
 
 .summary-panel .meter span {
   background: #fff !important;
+}
+
+.category-meter span {
+  animation: track-fill 500ms cubic-bezier(0.2, 0.9, 0.24, 1) both;
+  transform-origin: left center;
 }
 
 .status-strip {
@@ -1435,6 +1440,21 @@ body.is-cropping .app-shell {
   font-weight: 950;
 }
 
+.success-popup-detail {
+  max-width: 220px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 850;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.success-popup-detail[hidden] {
+  display: none;
+}
+
 .pwa-update-prompt[hidden] {
   display: none;
 }
@@ -2051,6 +2071,18 @@ label {
   color: #fff;
   font-weight: 950;
   box-shadow: 0 18px 36px rgba(255, 53, 28, 0.24);
+  transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
+  will-change: transform;
+}
+
+.primary-button:active,
+.tabbar .tab--primary:active,
+.savings-entry-shortcut:active {
+  transform: scale(0.96);
+}
+
+.primary-button.is-submitting-pop {
+  animation: submit-pop 340ms cubic-bezier(0.2, 0.9, 0.24, 1.28);
 }
 
 #entryView {
@@ -2079,6 +2111,7 @@ label {
   background: transparent;
   color: var(--muted);
   font-weight: 950;
+  transition: background 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
 }
 
 .entry-mode-option.is-active {
@@ -2651,9 +2684,12 @@ html[data-theme="ios26"] .entry-mode-option.is-active {
 .trend-track span {
   display: block;
   min-width: 3px;
+  width: var(--trend-width, 0);
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, var(--accent-2), var(--accent));
+  transform-origin: left center;
+  animation: track-fill 520ms cubic-bezier(0.2, 0.9, 0.24, 1) both;
 }
 
 .member-compare-row {
@@ -3080,6 +3116,24 @@ html[data-theme="custom"] .tabbar .tab.is-active:not(.tab--primary) {
   background: linear-gradient(135deg, #ffc400 0%, #ff351c 72%);
   color: #fff;
   box-shadow: 0 16px 34px rgba(255, 53, 28, 0.34);
+  transition: transform 150ms ease, box-shadow 150ms ease, filter 150ms ease;
+}
+
+.tabbar .tab--primary::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  z-index: -1;
+  border-radius: inherit;
+  background: radial-gradient(circle, rgba(255, 53, 28, 0.22), transparent 62%);
+  opacity: 0;
+  transform: scale(0.72);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.tabbar .tab--primary:active::after {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .tabbar .tab--primary.is-active {
@@ -3211,6 +3265,48 @@ html[data-theme="ios26"] .tabbar .tab--primary.is-active {
 html[data-theme="ios26"] .tabbar .tab--primary .tab-icon svg {
   width: 34px;
   height: 34px;
+}
+
+@keyframes submit-pop {
+  0% {
+    transform: scale(1);
+  }
+
+  42% {
+    transform: scale(0.94);
+    filter: brightness(1.06);
+  }
+
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes track-fill {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .primary-button,
+  .entry-mode-option,
+  .tabbar .tab--primary,
+  .savings-entry-shortcut,
+  .success-popup,
+  .success-popup-card {
+    transition: none;
+  }
+
+  .primary-button.is-submitting-pop,
+  .category-meter span,
+  .trend-track span {
+    animation: none;
+  }
 }
 
 @media (max-width: 560px) {
@@ -3363,6 +3459,8 @@ html[data-theme="ios26"] .tabbar .tab--primary .tab-icon svg {
   box-shadow: 0 12px 24px rgba(31, 138, 91, 0.18);
   -webkit-backdrop-filter: blur(16px);
   backdrop-filter: blur(16px);
+  transition: transform 150ms ease, box-shadow 150ms ease, background 150ms ease;
+  will-change: transform;
 }
 
 .savings-entry-shortcut svg {

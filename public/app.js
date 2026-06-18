@@ -128,6 +128,7 @@ const elements = {
   rankList: document.querySelector("#rankList"),
   successPopup: document.querySelector("#successPopup"),
   successPopupMessage: document.querySelector("#successPopupMessage"),
+  successPopupDetail: document.querySelector("#successPopupDetail"),
   pwaUpdatePrompt: document.querySelector("#pwaUpdatePrompt"),
   pwaUpdateButton: document.querySelector("#pwaUpdateButton"),
   pwaUpdateDismiss: document.querySelector("#pwaUpdateDismiss"),
@@ -1233,15 +1234,27 @@ function hideSuccessPopup() {
   }, 180);
 }
 
-function showSuccessPopup(message) {
+function showSuccessPopup(message, detail = "") {
   if (!elements.successPopup) return;
   window.clearTimeout(successPopupTimer);
   elements.successPopupMessage.textContent = message;
+  if (elements.successPopupDetail) {
+    elements.successPopupDetail.textContent = detail;
+    elements.successPopupDetail.hidden = !detail;
+  }
   elements.successPopup.hidden = false;
   window.requestAnimationFrame(() => {
     elements.successPopup.classList.add("is-visible");
   });
   successPopupTimer = window.setTimeout(hideSuccessPopup, 1200);
+}
+
+function triggerSubmitPulse(form) {
+  const button = form?.querySelector(".entry-submit-button, .primary-button");
+  if (!button) return;
+  button.classList.remove("is-submitting-pop");
+  void button.offsetWidth;
+  button.classList.add("is-submitting-pop");
 }
 
 function setView(view, options = {}) {
@@ -1715,7 +1728,7 @@ function renderCategories() {
         </div>
         <div class="category-amount">${money(category.spent)} / ${money(category.limit)}</div>
       </div>
-      <div class="category-meter"><span style="width:${Math.min(category.percent, 100)}%; background:${meterColor(category.percent)}"></span></div>
+      <div class="category-meter"><span style="--meter-width:${Math.min(category.percent, 100)}%; background:${meterColor(category.percent)}"></span></div>
       <div class="category-foot">
         <small>剩余 ${money(category.remaining)}</small>
         <small>日均 ${money(category.dailyRemaining)}</small>
@@ -2465,7 +2478,7 @@ function renderSavingsTrend() {
     row.className = "savings-trend-row";
     row.innerHTML = `
       <span>${escapeHtml(monthLabel(item.month))}</span>
-      <div class="trend-track"><span style="width:${percent}%"></span></div>
+      <div class="trend-track"><span style="--trend-width:${percent}%"></span></div>
       <strong>${money(amount)}</strong>
     `;
     elements.savingsTrendList.appendChild(row);
@@ -2494,7 +2507,7 @@ function renderSavingsMembers() {
         <strong>${escapeHtml(entry.label)}</strong>
         <em>${money(entry.amount)}</em>
       </div>
-      <div class="trend-track"><span style="width:${percent}%"></span></div>
+      <div class="trend-track"><span style="--trend-width:${percent}%"></span></div>
     `;
     elements.savingsMemberList.appendChild(row);
   });
@@ -2677,6 +2690,7 @@ function collectSavingPayload(amountInput, member, dateInput, noteInput) {
 async function submitSaving(event) {
   event.preventDefault();
   elements.savingFeedback.textContent = "提交中...";
+  triggerSubmitPulse(elements.savingForm);
   try {
     const payload = collectSavingPayload(
       elements.savingAmountInput,
@@ -2694,7 +2708,7 @@ async function submitSaving(event) {
     elements.savingNoteInput.value = "";
     elements.savingFeedback.textContent = `本月共存 ${money(state.data.savings.totals.month)} · 累计 ${money(state.data.savings.totals.all)}`;
     render();
-    showSuccessPopup("存钱成功");
+    showSuccessPopup("存钱成功", `+¥${money(payload.amount)} · ${payload.member || "共同存钱"}`);
   } catch (error) {
     if (error.isNetworkError) {
       try {
@@ -2710,7 +2724,7 @@ async function submitSaving(event) {
         elements.savingNoteInput.value = "";
         elements.savingFeedback.textContent = `网络不可用，已加入待同步队列（${state.offlineQueue.length} 笔）`;
         render();
-        showSuccessPopup("已离线保存");
+        showSuccessPopup("已离线保存", `+¥${money(payload.amount)} · 待同步`);
       } catch (validationError) {
         elements.savingFeedback.textContent = validationError.message;
       }
@@ -3185,6 +3199,7 @@ function replaceQueuedExpenseId(localId, serverId) {
 async function submitExpense(event) {
   event.preventDefault();
   elements.entryFeedback.textContent = "提交中...";
+  triggerSubmitPulse(elements.expenseForm);
 
   try {
     const payload = collectExpensePayload();
@@ -3203,7 +3218,7 @@ async function submitExpense(event) {
       : "已提交";
     state.selectedExpenseId = null;
     render();
-    showSuccessPopup("记账成功");
+    showSuccessPopup("记账成功", `¥${money(payload.amount)} · ${category ? category.name : "支出"} · ${payload.member}`);
     setView("details");
   } catch (error) {
     if (error.isNetworkError) {
@@ -3215,7 +3230,7 @@ async function submitExpense(event) {
         elements.noteInput.value = "";
         elements.entryFeedback.textContent = `网络不可用，已加入待同步队列（${state.offlineQueue.length} 笔）`;
         render();
-        showSuccessPopup("已离线保存");
+        showSuccessPopup("已离线保存", `¥${money(payload.amount)} · 待同步`);
         setView("details");
       } catch (validationError) {
         elements.entryFeedback.textContent = validationError.message;
