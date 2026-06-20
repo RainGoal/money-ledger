@@ -342,6 +342,12 @@ function setEntryMode(mode) {
   }
 }
 
+function mountEntrySubmitBar() {
+  if (elements.entrySubmitBar && elements.entrySubmitBar.parentElement !== document.body) {
+    document.body.appendChild(elements.entrySubmitBar);
+  }
+}
+
 function loadCustomTheme() {
   try {
     const value = JSON.parse(localStorage.getItem(CUSTOM_THEME_STORAGE_KEY) || "{}");
@@ -3746,6 +3752,7 @@ function registerServiceWorker() {
             }
           });
         });
+        registration.update().catch(() => {});
       })
       .catch(() => {});
   }
@@ -3841,6 +3848,7 @@ function dismissStartupScreen() {
 }
 
 function init() {
+  mountEntrySubmitBar();
   const now = today();
   elements.monthInput.value = now.month;
   elements.dateInput.value = now.date;

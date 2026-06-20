@@ -106,7 +106,7 @@
         }
       }
     </style>
-    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=50">
+    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=51">
   </head>
   <body>
     <div id="startupScreen" class="startup-screen" role="status" aria-live="polite">
@@ -275,14 +275,6 @@
             </label>
           </form>
 
-          <div id="entrySubmitBar" class="entry-submit-bar" aria-label="提交记账">
-            <div class="entry-submit-summary">
-              <strong id="entrySubmitAmount">待填写金额</strong>
-              <span id="entrySubmitMeta">选择分类和成员</span>
-              <p id="entryFeedback" class="feedback entry-submit-feedback" role="status"></p>
-            </div>
-            <button id="entrySubmitButton" class="primary-button entry-submit-button" type="button">记一笔</button>
-          </div>
         </section>
 
         <section id="detailsView" class="view" aria-label="记账明细">
@@ -730,6 +722,15 @@
       </nav>
     </div>
 
+    <div id="entrySubmitBar" class="entry-submit-bar" aria-label="提交记账">
+      <div class="entry-submit-summary">
+        <strong id="entrySubmitAmount">待填写金额</strong>
+        <span id="entrySubmitMeta">选择分类和成员</span>
+        <p id="entryFeedback" class="feedback entry-submit-feedback" role="status"></p>
+      </div>
+      <button id="entrySubmitButton" class="primary-button entry-submit-button" type="button">记一笔</button>
+    </div>
+
     <div id="cropModal" class="crop-modal" hidden>
       <div class="crop-dialog" role="dialog" aria-modal="true" aria-labelledby="cropTitle">
         <div class="crop-head">
@@ -803,6 +804,6 @@
         }, true);
       })();
     </script>
-    <script src="__BASE_PATH__/app.js?v=50" defer></script>
+    <script src="__BASE_PATH__/app.js?v=51" defer></script>
   </body>
 </html>
