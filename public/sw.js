@@ -1,6 +1,6 @@
-const CACHE_NAME = "money-ledger-v46";
+const CACHE_NAME = "money-ledger-v49";
 const BASE_PATH = "__BASE_PATH__";
-const ASSET_VERSION = "46";
+const ASSET_VERSION = "49";
 const ASSETS = [
   `${BASE_PATH}/`,
   `${BASE_PATH}/index.html`,
@@ -91,12 +91,13 @@ self.addEventListener("notificationclick", event => {
 
 async function navigationResponse(request) {
   const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(request) || await cache.match(`${BASE_PATH}/index.html`) || await cache.match(`${BASE_PATH}/`);
-  if (cached) {
-    fetchAndCache(cache, request).catch(() => {});
-    return cached;
+  try {
+    return await fetchAndCache(cache, request);
+  } catch {
+    const cached = await cache.match(request) || await cache.match(`${BASE_PATH}/index.html`) || await cache.match(`${BASE_PATH}/`);
+    if (cached) return cached;
+    throw new Error("navigation_unavailable");
   }
-  return fetchAndCache(cache, request);
 }
 
 async function staleWhileRevalidate(request) {

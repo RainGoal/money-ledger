@@ -323,6 +323,11 @@ function setEntryMode(mode) {
   });
   elements.expenseForm.hidden = state.entryMode !== "expense";
   if (elements.savingForm) elements.savingForm.hidden = state.entryMode !== "saving";
+  if (state.entryMode === "saving") {
+    renderSavingSubmitBar();
+  } else {
+    renderEntrySubmitBar();
+  }
 }
 
 function loadCustomTheme() {
@@ -3816,6 +3821,7 @@ function init() {
   const now = today();
   elements.monthInput.value = now.month;
   elements.dateInput.value = now.date;
+  if (elements.savingDateInput) elements.savingDateInput.value = now.date;
   applyTheme(state.theme);
   setView("dashboard");
   setEntryMode("expense");
