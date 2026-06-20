@@ -64,9 +64,11 @@ const elements = {
   noteInput: document.querySelector("#noteInput"),
   saveTemplateButton: document.querySelector("#saveTemplateButton"),
   templateList: document.querySelector("#templateList"),
+  entrySubmitBar: document.querySelector("#entrySubmitBar"),
   entrySubmitAmount: document.querySelector("#entrySubmitAmount"),
   entrySubmitMeta: document.querySelector("#entrySubmitMeta"),
   entryFeedback: document.querySelector("#entryFeedback"),
+  entrySubmitButton: document.querySelector("#entrySubmitButton"),
   offlineQueueStatus: document.querySelectorAll("[data-offline-queue-status]"),
   recentList: document.querySelector("#recentList"),
   detailSearchInput: document.querySelector("#detailSearchInput"),
@@ -148,9 +150,9 @@ const elements = {
   savingMemberChips: document.querySelector("#savingMemberChips"),
   savingDateInput: document.querySelector("#savingDateInput"),
   savingNoteInput: document.querySelector("#savingNoteInput"),
-  savingSubmitAmount: document.querySelector("#savingSubmitAmount"),
-  savingSubmitMeta: document.querySelector("#savingSubmitMeta"),
-  savingFeedback: document.querySelector("#savingFeedback"),
+  savingSubmitAmount: document.querySelector("#entrySubmitAmount"),
+  savingSubmitMeta: document.querySelector("#entrySubmitMeta"),
+  savingFeedback: document.querySelector("#entryFeedback"),
   savingDetailForm: document.querySelector("#savingDetailForm"),
   savingBackButton: document.querySelector("#savingBackButton"),
   savingCreatedAt: document.querySelector("#savingCreatedAt"),
@@ -315,14 +317,24 @@ function applyTheme(theme) {
 }
 
 function setEntryMode(mode) {
+  const previousMode = state.entryMode;
   state.entryMode = mode === "saving" ? "saving" : "expense";
   elements.entryModeOptions.forEach(button => {
     const isActive = button.dataset.entryMode === state.entryMode;
     button.classList.toggle("is-active", isActive);
     button.setAttribute("aria-pressed", String(isActive));
   });
+  if (previousMode !== state.entryMode && elements.entryFeedback) {
+    elements.entryFeedback.textContent = "";
+  }
   elements.expenseForm.hidden = state.entryMode !== "expense";
   if (elements.savingForm) elements.savingForm.hidden = state.entryMode !== "saving";
+  if (elements.entrySubmitBar) {
+    elements.entrySubmitBar.setAttribute("aria-label", state.entryMode === "saving" ? "提交存钱" : "提交记账");
+  }
+  if (elements.entrySubmitButton) {
+    elements.entrySubmitButton.textContent = state.entryMode === "saving" ? "存一笔" : "记一笔";
+  }
   if (state.entryMode === "saving") {
     renderSavingSubmitBar();
   } else {
@@ -1255,11 +1267,21 @@ function showSuccessPopup(message, detail = "") {
 }
 
 function triggerSubmitPulse(form) {
-  const button = form?.querySelector(".entry-submit-button, .primary-button");
+  const button = elements.entrySubmitButton || form?.querySelector(".entry-submit-button, .primary-button");
   if (!button) return;
   button.classList.remove("is-submitting-pop");
   void button.offsetWidth;
   button.classList.add("is-submitting-pop");
+}
+
+function submitCurrentEntryMode() {
+  const form = state.entryMode === "saving" ? elements.savingForm : elements.expenseForm;
+  if (!form) return;
+  if (typeof form.requestSubmit === "function") {
+    form.requestSubmit();
+    return;
+  }
+  form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
 }
 
 function setView(view, options = {}) {
@@ -1951,7 +1973,7 @@ function renderEntryControls() {
 }
 
 function renderEntrySubmitBar() {
-  if (!elements.entrySubmitAmount || !elements.entrySubmitMeta || !state.data) return;
+  if (state.entryMode !== "expense" || !elements.entrySubmitAmount || !elements.entrySubmitMeta || !state.data) return;
   const rawAmount = Number(String(elements.amountInput.value).replace(",", "."));
   const amount = roundMoney(rawAmount);
   const category = state.data.categories.find(item => item.id === state.selectedCategoryId);
@@ -2541,7 +2563,7 @@ function renderSavingMemberChips() {
 }
 
 function renderSavingSubmitBar() {
-  if (!elements.savingSubmitAmount || !state.data) return;
+  if (state.entryMode !== "saving" || !elements.savingSubmitAmount || !state.data) return;
   const rawAmount = Number(String(elements.savingAmountInput.value).replace(",", "."));
   const amount = roundMoney(rawAmount);
   const memberLabel = savingMemberLabel(state.savingMember);
@@ -3751,6 +3773,7 @@ function bindEvents() {
   elements.monthInput.addEventListener("change", loadState);
   elements.categoryDetailBack.addEventListener("click", closeDashboardCategory);
   elements.expenseForm.addEventListener("submit", submitExpense);
+  elements.entrySubmitButton?.addEventListener("click", submitCurrentEntryMode);
   elements.amountInput.addEventListener("input", renderEntrySubmitBar);
   elements.dateInput.addEventListener("change", renderEntrySubmitBar);
   elements.saveTemplateButton.addEventListener("click", saveCurrentTemplate);

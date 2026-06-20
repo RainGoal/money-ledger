@@ -106,7 +106,7 @@
         }
       }
     </style>
-    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=49">
+    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=50">
   </head>
   <body>
     <div id="startupScreen" class="startup-screen" role="status" aria-live="polite">
@@ -250,14 +250,6 @@
             </div>
 
             <p id="offlineQueueStatus" class="offline-queue-status" data-offline-queue-status role="status" hidden></p>
-            <div class="entry-submit-bar" aria-label="提交记账">
-              <div class="entry-submit-summary">
-                <strong id="entrySubmitAmount">待填写金额</strong>
-                <span id="entrySubmitMeta">选择分类和成员</span>
-                <p id="entryFeedback" class="feedback entry-submit-feedback" role="status"></p>
-              </div>
-              <button class="primary-button entry-submit-button" type="submit">记一笔</button>
-            </div>
           </form>
 
           <form id="savingForm" class="entry-panel savings-form" hidden>
@@ -281,16 +273,16 @@
               <span>备注</span>
               <input id="savingNoteInput" maxlength="80" placeholder="可选">
             </label>
-
-            <div class="entry-submit-bar" aria-label="提交存钱">
-              <div class="entry-submit-summary">
-                <strong id="savingSubmitAmount">待填写金额</strong>
-                <span id="savingSubmitMeta">选择成员</span>
-                <p id="savingFeedback" class="feedback entry-submit-feedback" role="status"></p>
-              </div>
-              <button class="primary-button entry-submit-button" type="submit">存一笔</button>
-            </div>
           </form>
+
+          <div id="entrySubmitBar" class="entry-submit-bar" aria-label="提交记账">
+            <div class="entry-submit-summary">
+              <strong id="entrySubmitAmount">待填写金额</strong>
+              <span id="entrySubmitMeta">选择分类和成员</span>
+              <p id="entryFeedback" class="feedback entry-submit-feedback" role="status"></p>
+            </div>
+            <button id="entrySubmitButton" class="primary-button entry-submit-button" type="button">记一笔</button>
+          </div>
         </section>
 
         <section id="detailsView" class="view" aria-label="记账明细">
@@ -811,6 +803,6 @@
         }, true);
       })();
     </script>
-    <script src="__BASE_PATH__/app.js?v=49" defer></script>
+    <script src="__BASE_PATH__/app.js?v=50" defer></script>
   </body>
 </html>
