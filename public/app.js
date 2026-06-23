@@ -93,6 +93,7 @@ const elements = {
   settingsFeedback: document.querySelector("#settingsFeedback"),
   memberRows: document.querySelector("#memberRows"),
   addMemberButton: document.querySelector("#addMemberButton"),
+  categoryBudgetSummary: document.querySelector("#categoryBudgetSummary"),
   budgetRows: document.querySelector("#budgetRows"),
   addCategoryButton: document.querySelector("#addCategoryButton"),
   notificationNotice: document.querySelector("#notificationNotice"),
@@ -343,8 +344,8 @@ function setEntryMode(mode) {
 }
 
 function mountEntrySubmitBar() {
-  if (elements.entrySubmitBar && elements.entrySubmitBar.parentElement !== document.body) {
-    document.body.appendChild(elements.entrySubmitBar);
+  if (elements.entrySubmitBar && elements.views.entry && elements.entrySubmitBar.parentElement !== elements.views.entry) {
+    elements.views.entry.appendChild(elements.entrySubmitBar);
   }
 }
 
@@ -2874,6 +2875,60 @@ function createMemberRow(member = "") {
   return row;
 }
 
+function categoryExpenseCount(categoryId) {
+  return (state.data?.expenses || []).filter(expense => expense.categoryId === categoryId).length;
+}
+
+function createBudgetRow(category, index) {
+  const icon = categoryIcon(category, index);
+  const limit = roundMoney(category.limit);
+  const spent = roundMoney(category.spent || 0);
+  const remaining = roundMoney(limit - spent);
+  const expenseCount = categoryExpenseCount(category.id);
+  const row = document.createElement("div");
+  row.className = "budget-row";
+  row.dataset.id = category.id;
+  row.dataset.spent = String(spent);
+  row.dataset.expenseCount = String(expenseCount);
+  row.style.setProperty("--accent", category.color);
+  row.innerHTML = `
+    <div class="budget-row-head">
+      <div class="budget-row-preview">
+        <span class="budget-preview-icon" aria-hidden="true">${escapeHtml(icon)}</span>
+        <div>
+          <strong class="budget-preview-name">${escapeHtml(category.name)}</strong>
+          <small class="budget-row-status">${expenseCount > 0 ? `${expenseCount} 笔 · 已用 ${money(spent)}` : "本月暂无记录"}</small>
+        </div>
+      </div>
+      <div class="budget-row-actions">
+        <button class="budget-order-button" type="button" data-budget-action="up" aria-label="上移${escapeAttribute(category.name)}">↑</button>
+        <button class="budget-order-button" type="button" data-budget-action="down" aria-label="下移${escapeAttribute(category.name)}">↓</button>
+        <button class="budget-remove-button" type="button" data-budget-action="remove" aria-label="删除${escapeAttribute(category.name)}">删除</button>
+      </div>
+    </div>
+    <div class="budget-row-fields">
+      <label>
+        <span>分类</span>
+        <input class="budget-name" value="${escapeAttribute(category.name)}" maxlength="20" required>
+      </label>
+      <label>
+        <span>额度</span>
+        <input class="budget-limit" value="${limit}" inputmode="decimal" required>
+        <small class="budget-row-balance">${remaining < 0 ? `超出 ${money(Math.abs(remaining))}` : `剩余 ${money(remaining)}`}</small>
+      </label>
+      <label>
+        <span>颜色</span>
+        <input class="budget-color" type="color" value="${category.color}">
+      </label>
+      <label>
+        <span>图标</span>
+        <input class="budget-icon" value="${escapeAttribute(icon)}" maxlength="4" aria-label="${escapeAttribute(category.name)}图标">
+      </label>
+    </div>
+  `;
+  return row;
+}
+
 function renderSettings() {
   elements.memberRows.innerHTML = "";
   state.data.members.forEach(member => {
@@ -2882,30 +2937,10 @@ function renderSettings() {
   elements.budgetRows.innerHTML = "";
 
   state.data.categories.forEach((category, index) => {
-    const row = document.createElement("div");
-    row.className = "budget-row";
-    row.dataset.id = category.id;
-    row.style.setProperty("--accent", category.color);
-    row.innerHTML = `
-      <label>
-        <span>分类</span>
-        <input class="budget-name" value="${escapeAttribute(category.name)}" maxlength="20" required>
-      </label>
-      <label>
-        <span>额度</span>
-        <input class="budget-limit" value="${category.limit}" inputmode="decimal" required>
-      </label>
-      <label>
-        <span>颜色</span>
-        <input class="budget-color" type="color" value="${category.color}">
-      </label>
-      <label>
-        <span>图标</span>
-        <input class="budget-icon" value="${escapeAttribute(categoryIcon(category, index))}" maxlength="4" aria-label="${escapeAttribute(category.name)}图标">
-      </label>
-    `;
-    elements.budgetRows.appendChild(row);
+    elements.budgetRows.appendChild(createBudgetRow(category, index));
   });
+  renderCategoryBudgetSummaryFromRows();
+  updateBudgetRowOrderButtons();
   renderNotificationSettings();
 }
 
@@ -3478,14 +3513,93 @@ function applyOfflineMutation() {
   replaceTrendState(nextState);
 }
 
+function parseBudgetLimit(row) {
+  const raw = String(row.querySelector(".budget-limit")?.value || "").trim().replace(",", ".");
+  return raw ? Number(raw) : NaN;
+}
+
 function collectBudgetRows() {
   return Array.from(elements.budgetRows.querySelectorAll(".budget-row")).map(row => ({
     id: row.dataset.id,
-    name: row.querySelector(".budget-name").value.trim(),
-    icon: row.querySelector(".budget-icon").value.trim(),
-    limit: Number(String(row.querySelector(".budget-limit").value).replace(",", ".")),
-    color: row.querySelector(".budget-color").value
+    name: row.querySelector(".budget-name")?.value.trim() || "",
+    icon: row.querySelector(".budget-icon")?.value.trim() || "",
+    limit: parseBudgetLimit(row),
+    color: row.querySelector(".budget-color")?.value || "#477061"
   }));
+}
+
+function validateBudgetRows(categories) {
+  if (categories.length === 0) throw new Error("请至少保留一个分类");
+  const seen = new Set();
+  categories.forEach((category, index) => {
+    const label = category.name || `第 ${index + 1} 个分类`;
+    if (!category.name) throw new Error("分类名称不能为空");
+    if (!category.icon) throw new Error(`${label} 需要填写图标`);
+    if (!Number.isFinite(category.limit) || category.limit < 0) {
+      throw new Error(`${label} 的额度必须是非负数字`);
+    }
+    const key = category.name.toLocaleLowerCase();
+    if (seen.has(key)) throw new Error(`分类名称重复：${category.name}`);
+    seen.add(key);
+  });
+}
+
+function renderCategoryBudgetSummaryFromRows() {
+  if (!elements.categoryBudgetSummary) return;
+  const rows = Array.from(elements.budgetRows.querySelectorAll(".budget-row"));
+  const totalLimit = rows.reduce((sum, row) => {
+    const limit = parseBudgetLimit(row);
+    return Number.isFinite(limit) && limit >= 0 ? sum + limit : sum;
+  }, 0);
+  const totalSpent = rows.reduce((sum, row) => sum + Number(row.dataset.spent || 0), 0);
+  const hasInvalidLimit = rows.some(row => {
+    const limit = parseBudgetLimit(row);
+    return !Number.isFinite(limit) || limit < 0;
+  });
+  const remaining = roundMoney(totalLimit - totalSpent);
+  elements.categoryBudgetSummary.innerHTML = `
+    <div>
+      <span>当前月份</span>
+      <strong>${escapeHtml(elements.monthInput.value || state.data?.month || today().month)}</strong>
+    </div>
+    <div>
+      <span>分类数</span>
+      <strong>${rows.length}</strong>
+    </div>
+    <div>
+      <span>总额度</span>
+      <strong>${hasInvalidLimit ? "待修正" : money(roundMoney(totalLimit))}</strong>
+    </div>
+    <div>
+      <span>剩余</span>
+      <strong>${hasInvalidLimit ? "待修正" : money(remaining)}</strong>
+    </div>
+  `;
+}
+
+function updateBudgetRowPreview(row) {
+  const name = row.querySelector(".budget-name")?.value.trim() || "未命名分类";
+  const icon = row.querySelector(".budget-icon")?.value.trim() || "🏷";
+  const color = row.querySelector(".budget-color")?.value || "#477061";
+  const spent = Number(row.dataset.spent || 0);
+  const limit = parseBudgetLimit(row);
+  const remaining = roundMoney((Number.isFinite(limit) ? limit : 0) - spent);
+  row.style.setProperty("--accent", color);
+  row.querySelector(".budget-preview-name").textContent = name;
+  row.querySelector(".budget-preview-icon").textContent = icon;
+  row.querySelector(".budget-row-balance").textContent = Number.isFinite(limit) && limit >= 0
+    ? remaining < 0 ? `超出 ${money(Math.abs(remaining))}` : `剩余 ${money(remaining)}`
+    : "额度待修正";
+}
+
+function updateBudgetRowOrderButtons() {
+  const rows = Array.from(elements.budgetRows.querySelectorAll(".budget-row"));
+  rows.forEach((row, index) => {
+    const upButton = row.querySelector('[data-budget-action="up"]');
+    const downButton = row.querySelector('[data-budget-action="down"]');
+    if (upButton) upButton.disabled = index === 0;
+    if (downButton) downButton.disabled = index === rows.length - 1;
+  });
 }
 
 function collectMemberRows() {
@@ -3507,13 +3621,15 @@ async function saveSettings(event) {
     if (members.length === 0) {
       throw new Error("请至少保留一个成员");
     }
+    const categories = collectBudgetRows();
+    validateBudgetRows(categories);
 
     const result = await api("/api/budgets", {
       method: "PUT",
       body: JSON.stringify({
         month: elements.monthInput.value,
         members,
-        categories: collectBudgetRows()
+        categories: categories.map(category => ({ ...category, limit: roundMoney(category.limit) }))
       })
     });
     state.data = result;
@@ -3528,31 +3644,25 @@ async function saveSettings(event) {
 }
 
 function addCategoryRow() {
-  const id = `cat-${cryptoId()}`;
-  const icon = CATEGORY_ICON_FALLBACKS[elements.budgetRows.children.length % CATEGORY_ICON_FALLBACKS.length];
-  const row = document.createElement("div");
-  row.className = "budget-row";
-  row.dataset.id = id;
-  row.style.setProperty("--accent", "#1f8a5b");
-  row.innerHTML = `
-    <label>
-      <span>分类</span>
-      <input class="budget-name" value="新分类" maxlength="20" required>
-    </label>
-    <label>
-      <span>额度</span>
-      <input class="budget-limit" value="0" inputmode="decimal" required>
-    </label>
-    <label>
-      <span>颜色</span>
-      <input class="budget-color" type="color" value="#477061">
-    </label>
-    <label>
-      <span>图标</span>
-      <input class="budget-icon" value="${escapeAttribute(icon)}" maxlength="4" aria-label="新分类图标">
-    </label>
-  `;
+  if (elements.budgetRows.querySelectorAll(".budget-row").length >= 24) {
+    elements.settingsFeedback.textContent = "最多支持 24 个分类";
+    return;
+  }
+
+  const index = elements.budgetRows.children.length;
+  const row = createBudgetRow({
+    id: `cat-${cryptoId()}`,
+    name: "新分类",
+    icon: CATEGORY_ICON_FALLBACKS[index % CATEGORY_ICON_FALLBACKS.length],
+    color: "#477061",
+    limit: 0,
+    spent: 0
+  }, index);
   elements.budgetRows.appendChild(row);
+  renderCategoryBudgetSummaryFromRows();
+  updateBudgetRowOrderButtons();
+  elements.settingsFeedback.textContent = "已新增分类，保存后生效";
+  row.scrollIntoView({ block: "nearest", behavior: "smooth" });
   row.querySelector(".budget-name").focus();
 }
 
@@ -3582,6 +3692,53 @@ function handleMemberRowsClick(event) {
 
   button.closest(".member-settings-row")?.remove();
   elements.settingsFeedback.textContent = "成员已移除，保存后生效";
+}
+
+function handleBudgetRowsClick(event) {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  const button = target.closest("[data-budget-action]");
+  if (!button) return;
+
+  const row = button.closest(".budget-row");
+  if (!row) return;
+  const action = button.dataset.budgetAction;
+
+  if (action === "remove") {
+    const rows = Array.from(elements.budgetRows.querySelectorAll(".budget-row"));
+    if (rows.length <= 1) {
+      elements.settingsFeedback.textContent = "请至少保留一个分类";
+      return;
+    }
+
+    const name = row.querySelector(".budget-name")?.value.trim() || "这个分类";
+    const expenseCount = Number(row.dataset.expenseCount || 0);
+    if (expenseCount > 0 && !window.confirm(`删除「${name}」后，本月 ${expenseCount} 笔记录会显示为未分类。建议只改名，确认删除吗？`)) {
+      return;
+    }
+
+    row.remove();
+    renderCategoryBudgetSummaryFromRows();
+    updateBudgetRowOrderButtons();
+    elements.settingsFeedback.textContent = "分类已移除，保存后生效";
+    return;
+  }
+
+  if (action === "up" && row.previousElementSibling) {
+    elements.budgetRows.insertBefore(row, row.previousElementSibling);
+  } else if (action === "down" && row.nextElementSibling) {
+    elements.budgetRows.insertBefore(row.nextElementSibling, row);
+  }
+  updateBudgetRowOrderButtons();
+  elements.settingsFeedback.textContent = "分类顺序已调整，保存后生效";
+}
+
+function handleBudgetRowsInput(event) {
+  const target = event.target;
+  if (!(target instanceof Element) || !target.closest(".budget-row")) return;
+  updateBudgetRowPreview(target.closest(".budget-row"));
+  renderCategoryBudgetSummaryFromRows();
+  elements.settingsFeedback.textContent = "分类修改后需保存";
 }
 
 function handleCalendarClick(event) {
@@ -3803,6 +3960,8 @@ function bindEvents() {
   elements.addMemberButton.addEventListener("click", addMemberRow);
   elements.memberRows.addEventListener("click", handleMemberRowsClick);
   elements.addCategoryButton.addEventListener("click", addCategoryRow);
+  elements.budgetRows.addEventListener("click", handleBudgetRowsClick);
+  elements.budgetRows.addEventListener("input", handleBudgetRowsInput);
   elements.enablePushButton?.addEventListener("click", () => {
     subscribePushNotifications().catch(error => {
       elements.notificationStatusText.textContent = error.message;
