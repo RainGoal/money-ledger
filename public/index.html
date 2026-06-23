@@ -106,7 +106,7 @@
         }
       }
     </style>
-    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=58">
+    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=59">
   </head>
   <body>
     <div id="startupScreen" class="startup-screen" role="status" aria-live="polite">
@@ -122,6 +122,7 @@
         </div>
         <label class="month-picker">
           <span>月份</span>
+          <span id="monthPickerDisplay" class="month-picker-display" aria-hidden="true">本月</span>
           <input id="monthInput" type="month">
         </label>
       </header>
@@ -804,6 +805,6 @@
         }, true);
       })();
     </script>
-    <script src="__BASE_PATH__/app.js?v=58" defer></script>
+    <script src="__BASE_PATH__/app.js?v=59" defer></script>
   </body>
 </html>

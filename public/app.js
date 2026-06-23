@@ -23,6 +23,7 @@ const BASE_PATH = normalizeBasePath(window.__LEDGER_BASE_PATH__ || "");
 const elements = {
   themeColorMeta: document.querySelector("meta[name='theme-color']"),
   monthInput: document.querySelector("#monthInput"),
+  monthPickerDisplay: document.querySelector("#monthPickerDisplay"),
   tabs: document.querySelectorAll(".tab"),
   entryModeOptions: document.querySelectorAll("[data-entry-mode]"),
   themeOptions: document.querySelectorAll("[data-theme-choice]"),
@@ -1655,10 +1656,19 @@ function dashboardMonthTitle(month) {
   return year === currentYear ? `${monthNumber}月账本` : `${year}年${monthNumber}月账本`;
 }
 
+function monthPickerText(month) {
+  const { year, monthNumber } = monthParts(month);
+  if (!Number.isFinite(year) || !Number.isFinite(monthNumber)) return "本月";
+  return `${year}年${monthNumber}月`;
+}
+
 function renderSummary() {
   const { totals } = state.data;
   if (elements.dashboardMonthTitle) {
     elements.dashboardMonthTitle.textContent = dashboardMonthTitle(state.data.month);
+  }
+  if (elements.monthPickerDisplay) {
+    elements.monthPickerDisplay.textContent = monthPickerText(state.data.month);
   }
   elements.totalSpent.textContent = money(totals.spent);
   elements.totalBudget.textContent = `/ ${money(totals.budget)}`;
