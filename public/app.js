@@ -35,6 +35,8 @@ const elements = {
     stats: document.querySelector("#statsView"),
     settings: document.querySelector("#settingsView")
   },
+  dashboardMonthTitle: document.querySelector("#dashboardMonthTitle"),
+  dashboardMonthStatus: document.querySelector("#dashboardMonthStatus"),
   totalSpent: document.querySelector("#totalSpent"),
   totalBudget: document.querySelector("#totalBudget"),
   totalMeter: document.querySelector("#totalMeter"),
@@ -1647,8 +1649,26 @@ function weekdayLabel(dateString) {
   return ["周日", "周一", "周二", "周三", "周四", "周五", "周六"][new Date(parts[0], parts[1] - 1, parts[2]).getDay()];
 }
 
+function dashboardMonthTitle(month) {
+  const { year, monthNumber } = monthParts(month);
+  if (!Number.isFinite(year) || !Number.isFinite(monthNumber)) return "本月账本";
+  const currentYear = new Date().getFullYear();
+  return year === currentYear ? `${monthNumber}月账本` : `${year}年${monthNumber}月账本`;
+}
+
 function renderSummary() {
   const { totals } = state.data;
+  if (elements.dashboardMonthTitle) {
+    elements.dashboardMonthTitle.textContent = dashboardMonthTitle(state.data.month);
+  }
+  if (elements.dashboardMonthStatus) {
+    const usageText = Number(totals.budget || 0) > 0 ? `已用 ${Number(totals.percent || 0)}%` : "未设置预算";
+    const remainingText = Number(totals.remaining || 0) < 0
+      ? `超支 ${money(Math.abs(totals.remaining))}`
+      : `剩余 ${money(totals.remaining)}`;
+    const daysText = Number(totals.remainingDays || 0) > 0 ? `还剩 ${totals.remainingDays} 天` : "本月已结束";
+    elements.dashboardMonthStatus.textContent = `${usageText} · ${remainingText} · ${daysText}`;
+  }
   elements.totalSpent.textContent = money(totals.spent);
   elements.totalBudget.textContent = `/ ${money(totals.budget)}`;
   elements.remainingAmount.textContent = money(totals.remaining);
