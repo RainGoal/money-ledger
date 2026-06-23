@@ -181,16 +181,16 @@ select {
 }
 
 .topbar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 26px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
 }
 
 .topbar-main {
-  flex: 1;
   min-width: 0;
+  overflow: hidden;
 }
 
 .eyebrow {
@@ -217,8 +217,11 @@ h1 {
 }
 
 #dashboardMonthTitle {
-  font-size: 1.58rem;
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 1.42rem;
   line-height: 1.08;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -231,9 +234,19 @@ h2 {
 }
 
 .month-picker {
-  display: grid;
-  gap: 6px;
-  min-width: 142px;
+  display: block;
+  width: 128px;
+  min-width: 0;
+  max-width: 40vw;
+}
+
+.month-picker span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 
 .month-picker span,
@@ -323,6 +336,13 @@ main {
   gap: 14px;
   align-items: center;
   margin-bottom: 18px;
+}
+
+.month-picker input {
+  min-height: 38px;
+  padding: 8px 10px;
+  font-size: 0.84rem;
+  text-align: center;
 }
 
 .avatar-pair {
@@ -3436,7 +3456,8 @@ html[data-theme="ios26"] .tabbar .tab--primary .tab-icon svg {
   }
 
   .topbar {
-    margin-bottom: 22px;
+    gap: 10px;
+    margin-bottom: 16px;
   }
 
   h1 {
@@ -3444,11 +3465,18 @@ html[data-theme="ios26"] .tabbar .tab--primary .tab-icon svg {
   }
 
   #dashboardMonthTitle {
-    font-size: 1.42rem;
+    font-size: 1.32rem;
   }
 
   .month-picker {
-    min-width: 118px;
+    width: 112px;
+    min-width: 0;
+    max-width: 42vw;
+  }
+
+  .month-picker input {
+    padding-inline: 8px;
+    font-size: 0.8rem;
   }
 
   .summary-panel {
