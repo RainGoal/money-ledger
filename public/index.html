@@ -106,7 +106,7 @@
         }
       }
     </style>
-    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=55">
+    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=56">
   </head>
   <body>
     <div id="startupScreen" class="startup-screen" role="status" aria-live="polite">
@@ -118,17 +118,12 @@
     <div class="app-shell">
       <header class="topbar">
         <div class="topbar-main">
-          <p class="eyebrow">Monthly Ledger</p>
           <h1 id="dashboardMonthTitle">本月账本</h1>
-          <p id="dashboardMonthStatus" class="topbar-status">预算状态加载中</p>
         </div>
-        <div class="topbar-actions">
-          <label class="month-picker">
-            <span>月份</span>
-            <input id="monthInput" type="month">
-          </label>
-          <button id="copySummaryButton" class="topbar-summary-button" type="button">摘要</button>
-        </div>
+        <label class="month-picker">
+          <span>月份</span>
+          <input id="monthInput" type="month">
+        </label>
       </header>
 
       <main>
@@ -143,6 +138,7 @@
                 <strong>我们的本月预算</strong>
                 <span>按分类控制开支</span>
               </div>
+              <button id="copySummaryButton" class="follow-button" type="button">摘要</button>
             </div>
 
             <div class="summary-panel">
@@ -808,6 +804,6 @@
         }, true);
       })();
     </script>
-    <script src="__BASE_PATH__/app.js?v=55" defer></script>
+    <script src="__BASE_PATH__/app.js?v=56" defer></script>
   </body>
 </html>

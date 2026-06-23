@@ -36,7 +36,6 @@ const elements = {
     settings: document.querySelector("#settingsView")
   },
   dashboardMonthTitle: document.querySelector("#dashboardMonthTitle"),
-  dashboardMonthStatus: document.querySelector("#dashboardMonthStatus"),
   totalSpent: document.querySelector("#totalSpent"),
   totalBudget: document.querySelector("#totalBudget"),
   totalMeter: document.querySelector("#totalMeter"),
@@ -1660,14 +1659,6 @@ function renderSummary() {
   const { totals } = state.data;
   if (elements.dashboardMonthTitle) {
     elements.dashboardMonthTitle.textContent = dashboardMonthTitle(state.data.month);
-  }
-  if (elements.dashboardMonthStatus) {
-    const usageText = Number(totals.budget || 0) > 0 ? `已用 ${Number(totals.percent || 0)}%` : "未设置预算";
-    const remainingText = Number(totals.remaining || 0) < 0
-      ? `超支 ${money(Math.abs(totals.remaining))}`
-      : `剩余 ${money(totals.remaining)}`;
-    const daysText = Number(totals.remainingDays || 0) > 0 ? `还剩 ${totals.remainingDays} 天` : "本月已结束";
-    elements.dashboardMonthStatus.textContent = `${usageText} · ${remainingText} · ${daysText}`;
   }
   elements.totalSpent.textContent = money(totals.spent);
   elements.totalBudget.textContent = `/ ${money(totals.budget)}`;
