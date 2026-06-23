@@ -344,8 +344,8 @@ function setEntryMode(mode) {
 }
 
 function mountEntrySubmitBar() {
-  if (elements.entrySubmitBar && elements.views.entry && elements.entrySubmitBar.parentElement !== elements.views.entry) {
-    elements.views.entry.appendChild(elements.entrySubmitBar);
+  if (elements.entrySubmitBar && elements.entrySubmitBar.parentElement !== document.body) {
+    document.body.appendChild(elements.entrySubmitBar);
   }
 }
 

@@ -106,7 +106,7 @@
         }
       }
     </style>
-    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=53">
+    <link rel="stylesheet" href="__BASE_PATH__/styles.css?v=54">
   </head>
   <body>
     <div id="startupScreen" class="startup-screen" role="status" aria-live="polite">
@@ -209,15 +209,6 @@
           <div class="entry-mode-switch" role="group" aria-label="记账类型">
             <button class="entry-mode-option is-active" type="button" data-entry-mode="expense" aria-pressed="true">支出</button>
             <button class="entry-mode-option" type="button" data-entry-mode="saving" aria-pressed="false">存钱</button>
-          </div>
-
-          <div id="entrySubmitBar" class="entry-submit-bar" aria-label="提交记账">
-            <div class="entry-submit-summary">
-              <strong id="entrySubmitAmount">待填写金额</strong>
-              <span id="entrySubmitMeta">选择分类和成员</span>
-              <p id="entryFeedback" class="feedback entry-submit-feedback" role="status"></p>
-            </div>
-            <button id="entrySubmitButton" class="primary-button entry-submit-button" type="button">记一笔</button>
           </div>
 
           <form id="expenseForm" class="entry-panel">
@@ -732,6 +723,15 @@
       </nav>
     </div>
 
+    <div id="entrySubmitBar" class="entry-submit-bar" aria-label="提交记账">
+      <div class="entry-submit-summary">
+        <strong id="entrySubmitAmount">待填写金额</strong>
+        <span id="entrySubmitMeta">选择分类和成员</span>
+        <p id="entryFeedback" class="feedback entry-submit-feedback" role="status"></p>
+      </div>
+      <button id="entrySubmitButton" class="primary-button entry-submit-button" type="button">记一笔</button>
+    </div>
+
     <div id="cropModal" class="crop-modal" hidden>
       <div class="crop-dialog" role="dialog" aria-modal="true" aria-labelledby="cropTitle">
         <div class="crop-head">
@@ -805,6 +805,6 @@
         }, true);
       })();
     </script>
-    <script src="__BASE_PATH__/app.js?v=53" defer></script>
+    <script src="__BASE_PATH__/app.js?v=54" defer></script>
   </body>
 </html>

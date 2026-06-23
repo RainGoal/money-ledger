@@ -2086,7 +2086,7 @@ label {
 }
 
 #entryView {
-  padding-bottom: calc(var(--tabbar-height) + 32px);
+  padding-bottom: 96px;
 }
 
 #entryView .entry-panel[hidden] {
@@ -2135,20 +2135,21 @@ html[data-theme="ios26"] .entry-mode-option.is-active {
 }
 
 .entry-submit-bar {
-  position: sticky;
-  top: 8px;
-  z-index: 35;
+  position: fixed;
+  left: 50%;
+  bottom: calc(104px + env(safe-area-inset-bottom));
+  z-index: 45;
   display: none;
   grid-template-columns: minmax(0, 1fr) 104px;
   gap: 10px;
   align-items: center;
-  width: 100%;
-  margin-bottom: 14px;
+  width: min(472px, calc(100vw - 48px));
   padding: 11px;
   border: 1px solid var(--line);
   border-radius: 24px;
   background: var(--surface);
   box-shadow: 0 16px 34px rgba(0, 0, 0, 0.1);
+  transform: translate3d(-50%, 0, 0);
   -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
 }
@@ -3542,7 +3543,7 @@ html[data-theme="ios26"] .tabbar .tab--primary .tab-icon svg {
   }
 
   .entry-submit-bar {
-    width: 100%;
+    width: calc(100vw - 40px);
   }
 
   .tabbar {
