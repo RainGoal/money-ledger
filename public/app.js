@@ -224,6 +224,7 @@ const HELLO_KITTY_ICON = assetPath("/hello-kitty-red.jpg");
 
 const CUSTOM_THEME_STORAGE_KEY = "ledgerCustomTheme";
 const ENTRY_TEMPLATE_STORAGE_KEY = "ledgerEntryTemplates";
+const LAST_EXPENSE_MEMBER_STORAGE_KEY = "ledgerLastExpenseMember";
 const OFFLINE_QUEUE_STORAGE_KEY = "ledgerOfflineExpenseQueue";
 const STATE_CACHE_STORAGE_KEY = "ledgerStateCache";
 const CUSTOM_TAB_SLOTS = [
@@ -390,6 +391,35 @@ function loadEntryTemplates() {
 
 function saveEntryTemplates() {
   localStorage.setItem(ENTRY_TEMPLATE_STORAGE_KEY, JSON.stringify(state.entryTemplates));
+}
+
+function loadLastExpenseMember() {
+  return String(localStorage.getItem(LAST_EXPENSE_MEMBER_STORAGE_KEY) || "").trim();
+}
+
+function saveLastExpenseMember(member) {
+  const value = String(member || "").trim();
+  if (value) {
+    localStorage.setItem(LAST_EXPENSE_MEMBER_STORAGE_KEY, value);
+  } else {
+    localStorage.removeItem(LAST_EXPENSE_MEMBER_STORAGE_KEY);
+  }
+}
+
+function selectExpenseMember(member, { remember = true } = {}) {
+  const value = String(member || "").trim();
+  if (!state.data?.members?.includes(value)) return false;
+  state.selectedMember = value;
+  if (remember) saveLastExpenseMember(value);
+  return true;
+}
+
+function ensureExpenseMemberSelection() {
+  if (selectExpenseMember(state.selectedMember)) return;
+  if (selectExpenseMember(loadLastExpenseMember(), { remember: false })) return;
+
+  state.selectedMember = state.data?.members?.[0] || null;
+  saveLastExpenseMember(state.selectedMember);
 }
 
 function loadOfflineQueue() {
@@ -1964,9 +1994,7 @@ function renderEntryControls() {
   if (!state.selectedCategoryId && state.data.categories[0]) {
     state.selectedCategoryId = state.data.categories[0].id;
   }
-  if (!state.selectedMember && state.data.members[0]) {
-    state.selectedMember = state.data.members[0];
-  }
+  ensureExpenseMemberSelection();
 
   elements.categoryChips.innerHTML = "";
   state.data.categories.forEach((category, index) => {
@@ -1991,7 +2019,7 @@ function renderEntryControls() {
     button.className = `member-chip${state.selectedMember === member ? " is-active" : ""}`;
     button.textContent = member;
     button.addEventListener("click", () => {
-      state.selectedMember = member;
+      selectExpenseMember(member);
       renderEntryControls();
     });
     elements.memberChips.appendChild(button);
@@ -3395,7 +3423,7 @@ function applyEntryTemplate(id) {
     state.selectedCategoryId = template.categoryId;
   }
   if (state.data.members.includes(template.member)) {
-    state.selectedMember = template.member;
+    selectExpenseMember(template.member);
   }
   renderEntryControls();
   elements.entryFeedback.textContent = "已填入常用模板";
@@ -3656,7 +3684,7 @@ async function saveSettings(event) {
     state.data = result;
     replaceTrendState(result);
     state.selectedCategoryId = state.data.categories[0]?.id || null;
-    state.selectedMember = state.data.members[0] || null;
+    ensureExpenseMemberSelection();
     elements.settingsFeedback.textContent = "已保存";
     render();
   } catch (error) {
@@ -3803,7 +3831,7 @@ async function importBackup(event) {
     state.trendStates = await loadTrendStates(result.state.month);
     state.selectedExpenseId = null;
     state.selectedCategoryId = state.data.categories[0]?.id || null;
-    state.selectedMember = state.data.members[0] || null;
+    ensureExpenseMemberSelection();
     elements.monthInput.value = state.data.month;
     render();
     elements.settingsFeedback.textContent = "导入成功";
@@ -3833,7 +3861,7 @@ async function clearAllData() {
     state.trendStates = await loadTrendStates(result.state.month);
     state.selectedExpenseId = null;
     state.selectedCategoryId = state.data.categories[0]?.id || null;
-    state.selectedMember = state.data.members[0] || null;
+    ensureExpenseMemberSelection();
     state.selectedStatsDate = null;
     state.detailFilters = { query: "", categoryId: "", member: "" };
     state.entryTemplates = [];
