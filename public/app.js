@@ -227,6 +227,8 @@ const ENTRY_TEMPLATE_STORAGE_KEY = "ledgerEntryTemplates";
 const LAST_EXPENSE_MEMBER_STORAGE_KEY = "ledgerLastExpenseMember";
 const OFFLINE_QUEUE_STORAGE_KEY = "ledgerOfflineExpenseQueue";
 const STATE_CACHE_STORAGE_KEY = "ledgerStateCache";
+const API_READ_TIMEOUT_MS = 10000;
+const API_WRITE_TIMEOUT_MS = 6000;
 const CUSTOM_TAB_SLOTS = [
   { key: "dashboard", label: "首页图标" },
   { key: "details", label: "明细图标" },
@@ -548,8 +550,7 @@ function hasQueuedOperationForExpense(expenseId) {
   return state.offlineQueue.some(item => queueItemMatchesExpense(item, expenseId));
 }
 
-function enqueueOfflineCreate(payload) {
-  const localId = localExpenseId();
+function enqueueOfflineCreate(payload, localId = localExpenseId()) {
   state.offlineQueue.push({
     id: cryptoId(),
     type: "create",
@@ -633,8 +634,7 @@ function hasQueuedOperationForSaving(savingId) {
   );
 }
 
-function enqueueOfflineSavingCreate(payload) {
-  const localId = localExpenseId();
+function enqueueOfflineSavingCreate(payload, localId = localExpenseId()) {
   state.offlineQueue.push({
     id: cryptoId(),
     type: "saving-create",
@@ -1251,19 +1251,40 @@ function notificationSupport() {
   return { supported: true, standalone, message: "" };
 }
 
+function apiTimeoutForOptions(options) {
+  const configured = Number(options.timeoutMs);
+  if (Number.isFinite(configured) && configured >= 0) return configured;
+  const method = String(options.method || "GET").toUpperCase();
+  return method === "GET" ? API_READ_TIMEOUT_MS : API_WRITE_TIMEOUT_MS;
+}
+
 async function api(path, options = {}) {
+  const requestOptions = { ...options };
+  const timeoutMs = apiTimeoutForOptions(requestOptions);
+  delete requestOptions.timeoutMs;
+  const controller = timeoutMs > 0 && typeof AbortController === "function" ? new AbortController() : null;
+  const timeout = controller
+    ? window.setTimeout(() => controller.abort(), timeoutMs)
+    : null;
   let response;
   try {
     response = await fetch(withBasePath(path), {
-      ...options,
+      ...requestOptions,
+      signal: controller ? controller.signal : requestOptions.signal,
       headers: {
         ...apiHeaders(),
-        ...(options.headers || {})
+        ...(requestOptions.headers || {})
       }
     });
   } catch (error) {
+    if (error.name === "AbortError") {
+      error.isTimeout = true;
+      error.message = "网络请求超时";
+    }
     error.isNetworkError = true;
     throw error;
+  } finally {
+    if (timeout) window.clearTimeout(timeout);
   }
 
   if (response.status === 401) {
@@ -2774,6 +2795,7 @@ async function submitSaving(event) {
   event.preventDefault();
   elements.savingFeedback.textContent = "提交中...";
   triggerSubmitPulse(elements.savingForm);
+  const localId = localExpenseId();
   try {
     const payload = collectSavingPayload(
       elements.savingAmountInput,
@@ -2783,7 +2805,7 @@ async function submitSaving(event) {
     );
     const result = await api(`/api/savings?month=${encodeURIComponent(state.data.month)}`, {
       method: "POST",
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ id: localId, ...payload })
     });
     state.data = result.state;
     replaceTrendState(result.state);
@@ -2801,7 +2823,7 @@ async function submitSaving(event) {
           elements.savingDateInput,
           elements.savingNoteInput
         );
-        enqueueOfflineSavingCreate(payload);
+        enqueueOfflineSavingCreate(payload, localId);
         applyOfflineMutation();
         elements.savingAmountInput.value = "";
         elements.savingNoteInput.value = "";
@@ -3230,7 +3252,7 @@ async function syncOfflineQueueItem(item) {
   if (item.type === "create") {
     const result = await api("/api/expenses", {
       method: "POST",
-      body: JSON.stringify(item.payload)
+      body: JSON.stringify({ id: item.localId, ...item.payload })
     });
     const serverId = result.expense?.id;
     if (serverId && item.localId) {
@@ -3256,7 +3278,7 @@ async function syncOfflineQueueItem(item) {
   if (item.type === "saving-create") {
     const result = await api("/api/savings", {
       method: "POST",
-      body: JSON.stringify(item.payload)
+      body: JSON.stringify({ id: item.localId, ...item.payload })
     });
     const serverId = result.saving?.id;
     if (serverId && item.localId) {
@@ -3317,12 +3339,13 @@ async function submitExpense(event) {
   event.preventDefault();
   elements.entryFeedback.textContent = "提交中...";
   triggerSubmitPulse(elements.expenseForm);
+  const localId = localExpenseId();
 
   try {
     const payload = collectExpensePayload();
     const result = await api("/api/expenses", {
       method: "POST",
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ id: localId, ...payload })
     });
     state.data = result.state;
     replaceTrendState(result.state);
@@ -3341,7 +3364,7 @@ async function submitExpense(event) {
     if (error.isNetworkError) {
       try {
         const payload = collectExpensePayload();
-        const localId = enqueueOfflineCreate(payload);
+        enqueueOfflineCreate(payload, localId);
         applyOfflineCreate(localId, payload);
         elements.amountInput.value = "";
         elements.noteInput.value = "";

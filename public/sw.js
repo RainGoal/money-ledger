@@ -1,24 +1,27 @@
-const CACHE_NAME = "money-ledger-v60";
+const CACHE_NAME = "money-ledger-v62";
 const BASE_PATH = "__BASE_PATH__";
-const ASSET_VERSION = "60";
-const ASSETS = [
+const ASSET_VERSION = "62";
+const CORE_ASSETS = [
   `${BASE_PATH}/`,
   `${BASE_PATH}/index.html`,
   `${BASE_PATH}/styles.css?v=${ASSET_VERSION}`,
   `${BASE_PATH}/app.js?v=${ASSET_VERSION}`,
   `${BASE_PATH}/manifest.webmanifest`,
-  `${BASE_PATH}/icon.svg`,
+  `${BASE_PATH}/icon.svg`
+];
+const OPTIONAL_ASSETS = [
   `${BASE_PATH}/hello-kitty-soft.jpg`,
   `${BASE_PATH}/hello-kitty-red.jpg`
 ];
 
 self.addEventListener("install", event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache =>
-      Promise.allSettled(ASSETS.map(asset => cache.add(asset)))
-    )
+    caches.open(CACHE_NAME).then(async cache => {
+      await cache.addAll(CORE_ASSETS);
+      await Promise.allSettled(OPTIONAL_ASSETS.map(asset => cache.add(asset)));
+      await self.skipWaiting();
+    })
   );
-  self.skipWaiting();
 });
 
 self.addEventListener("activate", event => {

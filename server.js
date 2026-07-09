@@ -907,6 +907,12 @@ function isValidDate(date) {
   return parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day;
 }
 
+function normalizeClientRecordId(id) {
+  const value = String(id || "").trim();
+  if (!value || value.length > 120) return "";
+  return /^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$/.test(value) ? value : "";
+}
+
 function daysInMonth(month) {
   const [year, monthNumber] = month.split("-").map(Number);
   return new Date(year, monthNumber, 0).getDate();
@@ -1412,6 +1418,12 @@ async function handleApi(req, res, url) {
     const date = String(payload.date || currentDate()).trim();
     const member = String(payload.member || data.members[0] || "").trim();
     const note = String(payload.note || "").trim().slice(0, 80);
+    const requestedId = normalizeClientRecordId(payload.id);
+    const existingExpense = requestedId ? data.expenses.find(item => item.id === requestedId) : null;
+    if (existingExpense) {
+      sendJson(res, 200, { expense: existingExpense, state: buildState(data, existingExpense.date.slice(0, 7)) });
+      return;
+    }
 
     if (!isValidDate(date)) {
       sendJson(res, 400, { error: "invalid_date" });
@@ -1431,7 +1443,7 @@ async function handleApi(req, res, url) {
     }
 
     const expense = {
-      id: crypto.randomUUID(),
+      id: requestedId || crypto.randomUUID(),
       date,
       member,
       categoryId,
@@ -1517,6 +1529,12 @@ async function handleApi(req, res, url) {
     const date = String(payload.date || currentDate()).trim();
     const memberRaw = String(payload.member || "").trim();
     const note = String(payload.note || "").trim().slice(0, 80);
+    const requestedId = normalizeClientRecordId(payload.id);
+    const existingSaving = requestedId ? (data.savings || []).find(item => item.id === requestedId) : null;
+    if (existingSaving) {
+      sendJson(res, 200, { saving: existingSaving, state: buildState(data, month) });
+      return;
+    }
 
     if (!isValidDate(date)) {
       sendJson(res, 400, { error: "invalid_date" });
@@ -1532,7 +1550,7 @@ async function handleApi(req, res, url) {
     }
 
     const saving = {
-      id: crypto.randomUUID(),
+      id: requestedId || crypto.randomUUID(),
       date,
       member: memberRaw,
       amount,
